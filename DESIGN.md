@@ -291,7 +291,158 @@ body：`{ action: "plan"|"render"|"review"|"publish-dry"|"publish-go", dir?, top
 
 ---
 
-## 10. 参考文件（先读再写）
+## 10. v0.2：借鉴 DeepSeek Super-agent 的工单模型（2026-11-07）
+
+> 参考：`deepseek-ai/dsh-superagent-prototype`（《Exploring Super-agent Design》官方原型，MIT）。
+> 学的是**结构**，不是照搬规模：它的 Source→Eval→Ticket→Executor→Panel 五段，在我们这里压成
+> Trigger→Admission→Ticket→Worker Session→「待你处理」，概念数只加 1 个（Ticket），设置只加 6 项。
+> 课程笔记见 `docs/SUPERAGENT-NOTES.md`（由文档负责人写）。
+
+### 12.1 为什么要加
+
+现在的生物钟是「到点 → 直接 wake → agent 干活」，缺三样东西（super-agent 都给了明确答案）：
+
+1. **没有工单**：一次叫醒没有身份、没有阶段、没有历史；失败/待审只能靠读文件和翻会话。
+2. **没有准入记录**：*为什么今天做 / 为什么没做* 没有落盘，无法解释、无法审计。
+3. **没有看门狗和恢复**：render 卡死没人管；宿主重启后状态是「未知」而不是「可恢复的工单」。
+
+### 12.2 新概念：Ticket（工单）
+
+一次「做一条视频」的授权工作单元。由准入（admission）创建，绑定一个目录、一个会话、若干任务；
+所有状态**优先由证据推导**（文件/任务/报告），不靠自由文本推断。
+
+```jsonc
+// <DSH_HOME>/bili-faship/tickets.json
+{ "version": 1, "policyVersion": "0.2.0",
+  "tickets": [{
+    "id": "tk-20261107-0001-ab12",
+    "short": "day3-站在中间",            // 目录名；会话名后缀
+    "createdAt": "ISO", "updatedAt": "ISO", "endedAt": null,
+    "trigger": { "kind": "schedule|manual", "reason": "到期：距上次发布 3 天", "basis": "inferred|explicit" },
+    "mandate": { "policyVersion": "0.2.0", "scope": "一条视频：plan→render→review→dry", "observeOnly": false },
+    "dir": "<videoRoot>/<short>",
+    "sessionId": "bili-faship-<short> | bili-faship | null",
+    "attempts": 1,
+    "report": { "status": "progress|waiting|ready|blocked|failed|dropped", "note": "", "at": "ISO" } | null,
+    "attention": [{ "id": "at-1", "kind": "review-failed", "detail": "…", "since": "ISO", "actions": ["retry","ack"] }],
+    "outcome": { "kind": "published|dropped|stopped|failed", "detail": "", "at": "ISO" } | null,
+    "events": [{ "at": "ISO", "type": "admitted|dispatched|report|job-started|job-finished|attention|retry|ack|stopped|ended", "detail": "…" }]
+  }],
+  "admission": [{ "at": "ISO", "kind": "schedule|manual", "decision": "accept|reject",
+                  "reason": "due|not-due|out-of-window|cooldown|category|…", "checks": { "due": true } }]
+}
+```
+
+- 只保留最近 50 个工单、50 条准入记录；写盘原子（tmp+rename）。
+- **阶段（stage）由宿主推导**，客户端只显示，不自己判断。规则按顺序取第一个匹配：
+
+| stage | 条件 | 面板标签 |
+|---|---|---|
+| `person/delivery` | 叫醒投递失败且未重试成功 | 待你处理（投递失败）|
+| `person/blocked` | 有 attention（report=blocked 或 601/风控） | 受阻，等你 |
+| `person/failed` | 最近 report=failed，或 job failed 且自动重试用尽 | 失败，等你 |
+| `person/review` | 成片 + `review.pass=true` + dry 投稿包就绪，还没发布 | 等你审阅 / 决定发布 |
+| `working/queued` | 开放但还没有 Assignment | 排队中 |
+| `working/running` | 有 Assignment（会话已投递且在跑）或属于该工单的后台任务在跑 | 制作中 |
+| `idle` | report=waiting，或 Assignment 结束且没在等任何人 | ……（等下一次触发）|
+| `done/published` / `done/dropped` / `done/stopped` / `done/failed` | 已结束 | 已发布 / 无需处理 / 已停止 / 已失败 |
+
+- `person/*` = 不能无人继续；`idle` = 这一轮做完了，等下一次 Trigger。
+
+### 12.3 准入（Admission，确定性闸门）
+
+调度每次想建工单前，按顺序检查（第一条失败即原因；**不调 LLM**）：
+
+1. `video.enabled`（总开关）
+2. 自动触发还要 `schedule.enabled`
+3. 投稿索引损坏 → 拒绝（`index-corrupt`）
+4. 已有后台任务在跑 → `job-running`
+5. 已有开放工单在 `working/*` → `ticket-working`
+6. 今天工单数 ≥ `tickets.maxPerDay`（默认 2）→ `daily-limit`
+7. 自动触发：未到期 → `not-due`；不在窗口 → `out-of-window`
+8. 自动触发：距上次叫醒 < `cooldownHours`（30h）→ `cooldown`
+9. 通过 → `accept`，建工单（自动=`inferred`；手动=`explicit`）
+
+- 每次 accept、手动触发、以及「到期却因窗口/冷却/限额没做」都要落一条 admission 记录；
+  完全没到期的 tick 不记录（**安静**）。
+- `admission.observeOnly=true` 时仍建工单、仍叫醒，但 mandate 标 `observeOnly`：
+  worker 只做「选题 + storyboard 草稿 + 依赖检查 + 计划」，**禁止 render / publish**，把"如果放开会怎么做"写进汇报。
+
+### 12.4 派工（Assignment）与 Worker 会话
+
+- 派工 = 投递叫醒词。两种会话模式（`worker.sessionMode`）：
+  - `per-ticket`（**默认，v0.2 起**）：`sessionId = "bili-faship-" + short`，cwd = **工单目录**。
+    每条片一个干净上下文；记忆走文件（日记 / last-report / 工单历史），不靠会话长大。
+  - `persistent`：沿用 v0.1 的固定会话 `bili-faship` + `<DSH_HOME>/faship-work`。
+- 投递成功：`sessionId`/`attempts+=1`/事件 `dispatched` 落盘；失败：attention `delivery-failed`（下次 tick 重试，不 ++attempts）。
+- 叫醒词（`lib/prompt.mjs` 的 `buildTicketPrompt`）必须含：Mandate（为什么允许、basis、observeOnly）、
+  工单目录、素材与上次汇报、**恢复说明**（若是重试/重启：先检查目录、别重复已完成的步骤）、
+  五步流程、红线、投稿策略、**结构化报告要求**（用 `faship_report`），以及「今天不想做也可以」。
+
+### 12.5 结构化报告 `faship_report`
+
+`faship_report { ticket, status, note? }`，status ∈ `progress|waiting|ready|blocked|failed|dropped`。
+- 宿主把它写进工单 `report`；`dropped` 直接结案（`done/dropped`，不发消息）；
+  `blocked/failed` 生成 attention；`ready` 进入 `person/review`（等人决定发布）。
+- 工单 id 由叫醒词给出；工具校验工单存在且开放。
+
+### 12.6 看门狗与恢复（Watchdog / Recovery）
+
+- 插件每 60s tick 顺带：对每个 running 任务检查「最后日志增长时间」与「已运行时长」；
+  超过 `watchdog.maxJobMinutes`（默认 40）或 `watchdog.idleMinutes`（默认 8）无输出 →
+  结束子进程、任务标 `failed`（note 写明 watchdog）、工单 attention `stalled`。
+- 插件启动时：`jobs.json` 里遗留 running → `interrupted`（已有行为）；开放工单若在 `working/*` 但没有活任务 →
+  attention `host-restarted`，并写事件；下一次派工带恢复说明。
+- **自动重试**（`worker.autoRetry.enabled`，默认 true）：attention ∈
+  `render-failed|job-failed|publish-failed|stalled|host-restarted|delivery-failed` 且 `attempts < maxAttempts`（默认 2）
+  且距上次尝试 ≥ `backoffMinutes`（默认 10）→ 自动再派工一次（工单事件 `retry`），用尽后转为 `person/failed`。
+  `review-failed` 不自动重试（内容问题，等人或 agent 手动 `retry`）。
+- 平台风控（任务日志含 `601/412/429`）→ attention `rate-limited`，**永不自动重试**（红线）。
+
+### 12.7 面板与「待你处理」
+
+设置页顶部新增：
+- **待你处理**：attention 列表（工单标题、kind 中文、detail、since、按钮「重试 / 我知道了」）；
+  为空时整块隐藏（healthy 状态不占注意力）。
+- **工单**：最近工单（阶段标签、尝试次数、目录、折叠的时间线）。
+- **准入**：今日工单数 / 上限、最近一次 accept/reject 原因。
+- 新设置项（7 项）：`tickets.maxPerDay`、`worker.sessionMode`、`admission.observeOnly`（以上 3 项放「节奏」组）、
+  `worker.autoRetry.enabled`、`worker.autoRetry.maxAttempts`、`watchdog.enabled`、`watchdog.maxJobMinutes`（以上 4 项放「工单与看门狗」组）。
+
+### 12.8 API / 工具增量
+
+- `GET /tickets` → `{ok, policyVersion, tickets:[{…, stage, stageLabel}], attention:[{ticketId,short,title,kind,detail,since,actions}], admission:{todayCount,maxPerDay,last,recent}}`
+- `POST /tickets` body `{id, action:"retry"|"ack"|"stop"}`：
+  - `retry`：仅开放工单；清 attention、再派工（不受窗口/冷却限制，但受 `job-running`/`ticket-working` 约束）
+  - `ack`：清 attention、写事件（工单保持开放）
+  - `stop`：结案 `done/stopped`；若该工单的任务在跑，先结束它
+- `GET /status` 增加 `tickets:{open,attention}` 与 `admission.last`
+- 工具：`faship_tickets {}`、`faship_report {ticket,status,note?}`、`faship_ticket_action {id,action}`；
+  `faship_status` 增加 `needsAttention`。
+- 兼容：v0.1 的 `/settings` `/status` 字段全部保留；旧 `faship_wake` 行为改为「建 manual 工单 + 派工」。
+
+### 12.9 配置增量（并入 VIDEO_DEFAULTS）
+
+```jsonc
+tickets: { maxPerDay: 2 },
+worker: {
+  sessionMode: "per-ticket",            // per-ticket | persistent
+  autoRetry: { enabled: true, maxAttempts: 2, backoffMinutes: 10 }
+},
+watchdog: { enabled: true, maxJobMinutes: 40, idleMinutes: 8 },
+admission: { observeOnly: false }
+```
+
+### 12.10 不采纳的部分（保持「少概念」）
+
+- Source / Thread / Subscription / Correlation / Channel：我们只有一个时钟 Source 和本地投递，不需要。
+- Eval 的 LLM 研判：我们的准入是**确定性**的（due/窗口/冷却/限额），不花 token、可解释。
+- Policy 版本化 / Mandate 撤销：单用户本地工具，`policyVersion` 只用于审计。
+- 多 Executor 并发：本插件假设一台机器一条流水线，工单串行（同时最多一个 working），不引入 worker 池。
+
+---
+
+## 11. 参考文件（先读再写）
 
 - 原项目：`D:/agent_train/bili-faship/`（HANDOFF.md、README.md、docs/、tools/、tests/）
 - 设置页/生物钟/信任栅栏/依赖体检/node 运行时：
@@ -304,7 +455,7 @@ body：`{ action: "plan"|"render"|"review"|"publish-dry"|"publish-go", dir?, top
 
 ---
 
-## 11. 禁止事项
+## 12. 禁止事项
 
 - 不改 `D:/agent_train/bili-faship`、不改 `C:/Users/zcr/.dsh/plugins/dsh-bili-whale`。
 - 不动 `C:/Users/zcr/.dsh/profiles/desktop` 里的任何文件（安装由 Lead 统一做）。

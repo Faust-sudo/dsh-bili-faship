@@ -70,6 +70,8 @@ window.__ModuleLoader__.load({
       '.bf-badge[data-tone=good]{color:var(--dsw-alias-state-success-primary,#22c55e)}',
       '.bf-badge[data-tone=warn]{color:var(--dsw-alias-state-warning-primary,#d29922)}',
       '.bf-badge[data-tone=bad]{color:var(--dsw-alias-state-error-primary,#e5484d)}',
+      '.bf-badge[data-tone=info]{color:var(--dsw-alias-brand-primary,#4c8dff)}',
+      '.bf-badge[data-tone=muted]{color:var(--dsw-alias-label-tertiary,#9aa0a6)}',
       '.bf-badge[data-danger]{background:rgba(229,72,77,.16);background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#e5484d) 18%,transparent);color:var(--dsw-alias-state-error-primary,#e5484d)}',
       '.bf-kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:4px 20px}',
       '.bf-kv>div{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary,#c9ccd1);word-break:break-all}',
@@ -102,6 +104,27 @@ window.__ModuleLoader__.load({
       '.bf-check[data-ok]{color:var(--dsw-alias-label-secondary,#c9ccd1)}',
       '.bf-pre{margin:4px 0 0;padding:8px 9px;border-radius:8px;max-height:180px;overflow:auto;font-size:11px;line-height:15px;white-space:pre-wrap;word-break:break-all;background:var(--dsw-alias-bg-layer-2,rgba(0,0,0,.18));color:var(--dsw-alias-label-secondary,#c9ccd1)}',
       '.bf-foot{display:flex;flex-direction:column;gap:2px;margin-top:14px;padding-top:10px;border-top:.5px solid var(--dsw-alias-border-l2,rgba(127,127,127,.25))}',
+      // ── v0.2：待你处理 / 工单 ──
+      '.bf-attn{display:flex;flex-direction:column;gap:6px;margin:10px 0 2px;padding:10px 12px;border-radius:12px;border:1px solid rgba(210,153,34,.5);border:1px solid color-mix(in srgb,var(--dsw-alias-state-warning-primary,#d29922) 50%,transparent);background:rgba(210,153,34,.08);background:color-mix(in srgb,var(--dsw-alias-state-warning-primary,#d29922) 9%,transparent)}',
+      '.bf-attn-title{font-size:13px;font-weight:600;line-height:20px;color:var(--dsw-alias-state-warning-primary,#d29922)}',
+      '.bf-attn-item{display:flex;flex-direction:column;gap:4px;padding:8px 0;border-top:.5px solid rgba(210,153,34,.25)}',
+      '.bf-attn-item:first-of-type{border-top:none;padding-top:2px}',
+      '.bf-attn-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}',
+      '.bf-attn-name{font-size:13px;font-weight:600;word-break:break-word}',
+      '.bf-attn-detail{font-size:12px;line-height:17px;color:var(--dsw-alias-label-secondary,#c9ccd1);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}',
+      '.bf-attn-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}',
+      '.bf-attn-actions .bf-btn2{height:26px;padding:0 10px;font-size:12px}',
+      '.bf-tickets{display:flex;flex-direction:column;gap:6px;margin-top:6px}',
+      '.bf-ticket{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border-radius:10px;border:1px solid var(--dsw-alias-border-l2,rgba(127,127,127,.25));background:var(--dsw-alias-bg-layer-1,rgba(127,127,127,.05))}',
+      '.bf-ticket-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-width:0}',
+      '.bf-ticket-title{font-size:13px;font-weight:600;word-break:break-word;min-width:0}',
+      '.bf-ticket-meta{font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary,#9aa0a6);word-break:break-all}',
+      '.bf-ticket-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}',
+      '.bf-ticket-actions .bf-btn2{height:24px;padding:0 9px;font-size:11.5px}',
+      '.bf-events{display:flex;flex-direction:column;gap:2px;margin-top:4px;padding-top:6px;border-top:.5px dashed var(--dsw-alias-border-l2,rgba(127,127,127,.25));max-height:200px;overflow:auto}',
+      '.bf-event{font-size:11px;line-height:16px;color:var(--dsw-alias-label-secondary,#c9ccd1);word-break:break-word}',
+      '.bf-sec-toggle{align-self:flex-start;cursor:pointer;background:transparent;border:none;font:inherit;font-size:12px;line-height:18px;padding:0;color:var(--dsw-alias-label-tertiary,#9aa0a6)}',
+      '.bf-sec-toggle:hover{color:var(--dsw-alias-label-primary,inherit)}',
       '.bf-lock{margin-left:6px}',
       '.bf-badge-danger{margin-left:6px}',
     ].join('')
@@ -192,6 +215,11 @@ window.__ModuleLoader__.load({
     const saveBody = (config) => ({ config })   // §5：保存提交整份配置
     /** POST /settings：body 按 DESIGN §5 发 `{ config }`（宿主也接受裸 `{...}`；整份配置提交）。 */
     const postSave = async (config) => jpost('/settings', saveBody(config))
+    /** POST /tickets body `{ id, action }`；action ∈ retry | ack | stop（DESIGN §10.8） */
+    const postTicketAction = async (id, action) => jpost('/tickets', {
+      id: String(id || ''),
+      action: String(action || ''),
+    })
     const fieldKey = (f) => f.path.map(String).join('.')
     // /media 的 dir：DESIGN §5 写的是 <slug>，但宿主 resolveDir 对绝对路径/相对 slug 都支持；
     // 这里优先用 /videos 返回的绝对 dir（避免 story.slug 与目录名不一致时读不到文件），没有再用 slug。
@@ -237,6 +265,65 @@ window.__ModuleLoader__.load({
     const JOB_LABELS = { plan: '写分镜', render: '渲染', review: '自审', 'publish-dry': 'dry 投稿包' }
     const jobLabel = (action) => JOB_LABELS[String(action || '')] || (action ? String(action) : '任务')
 
+    // ── v0.2 工单 / 待你处理 / 准入（DESIGN §10.2 / §10.7 / §10.8）──────────
+    // attention.kind → 人话；未知值原样显示（宿主以后加 kind 也不会被吞）
+    const ATTENTION_KIND_LABELS = {
+      'rate-limited': 'B站风控待人工',
+      'job-failed': '失败',
+      'render-failed': '失败',
+      'publish-failed': '投稿失败',
+      stalled: '卡住',
+      'host-restarted': '宿主重启',
+      'review-failed': '自审未过',
+      'ready-for-review': '成片就绪待决定',
+      'delivery-failed': '投递失败',
+      blocked: '受阻',
+      failed: '失败',
+    }
+    const attentionKindLabel = (kind) => ATTENTION_KIND_LABELS[String(kind || '')] || (kind ? String(kind) : '待处理')
+    // 工单阶段 → 面板标签 + 颜色（§10.2 表；host 明确给 stageLabel 就以 host 为准 —— 客户端不自己判断阶段）
+    const TICKET_STAGES = {
+      'person/delivery': { label: '待你处理（投递失败）', tone: 'warn' },
+      'person/blocked': { label: '受阻，等你', tone: 'warn' },
+      'person/failed': { label: '失败，等你', tone: 'warn' },
+      'person/review': { label: '等你审阅 / 决定发布', tone: 'warn' },
+      'working/queued': { label: '排队中', tone: 'info' },
+      'working/running': { label: '制作中', tone: 'info' },
+      idle: { label: '等下一次触发', tone: 'muted' },
+      'done/published': { label: '已发布', tone: 'good' },
+      'done/dropped': { label: '无需处理', tone: 'good' },
+      'done/stopped': { label: '已停止', tone: 'muted' },
+      'done/failed': { label: '已失败', tone: 'bad' },
+    }
+    const ticketStage = (stage) => TICKET_STAGES[String(stage || '')] || { label: stage ? String(stage) : '未知阶段', tone: 'muted' }
+    const ticketStageLabel = (t) => String((t && t.stageLabel) || ticketStage(t && t.stage).label)
+    const ticketStageTone = (t) => ticketStage(t && t.stage).tone
+    const ticketTitle = (t) => String((t && (t.title || t.short || t.id)) || '未命名工单')
+    // 开放工单 = 还没结束（person/* 与 working/* 都算开放）
+    const isOpenTicket = (t) => Boolean(t) && !String(t.stage || '').startsWith('done/')
+    // 准入原因 → 人话（§12.3 的判定顺序；未知原样）
+    const ADMISSION_REASONS = {
+      accept: '可以开始',
+      due: '到期可做',
+      'not-due': '没到期',
+      'out-of-window': '不在窗口',
+      cooldown: '冷却中',
+      'daily-limit': '今日额度用完',
+      'job-running': '有任务在跑',
+      'ticket-working': '工单进行中',
+      category: '分类不允许',
+      'index-corrupt': '投稿索引损坏',
+      disabled: '总开关关着',
+      'schedule-off': '生物钟关着',
+      'no-session-controller': '宿主没有 sessionController',
+      'ticket-not-found': '工单不存在',
+      'ticket-ended': '工单已结束',
+    }
+    const admissionReasonText = (reason) => ADMISSION_REASONS[String(reason || '')] || (reason ? String(reason) : '—')
+    const admissionDecisionText = (d) => (d === 'accept' ? '接受' : d === 'reject' ? '拒绝' : (d ? String(d) : '—'))
+    const attentionActions = (a) => (Array.isArray(a && a.actions) && a.actions.length ? a.actions : ['retry', 'ack'])
+    const MAX_TICKET_EVENTS = 20
+
     /**
      * 唯一真相：设置页字段清单（DESIGN §4 全部配置项；加字段只改这里）。
      * kind: text | number | switch | select | list | range
@@ -262,6 +349,28 @@ window.__ModuleLoader__.load({
         hint: '叫醒失败后至少隔这么久再试（1–240）' },
       { group: '节奏', path: ['schedule', 'cooldownHours'], label: '叫醒后冷却（小时）', kind: 'number', min: 1, max: 240, step: 1,
         hint: '成功叫醒后的硬冷却（默认 30，1–240），避免一天里重复投递' },
+      // ── v0.2 新增（DESIGN §10.9；前三个收在「节奏」，后四个在「工单与看门狗」）──
+      { group: '节奏', path: ['tickets', 'maxPerDay'], label: '每天最多做几条（工单上限）', kind: 'number', min: 1, max: 10, step: 1,
+        hint: '1–10（默认 2）；准入按这个限额拒绝，防止一天里反复做片' },
+      { group: '节奏', path: ['worker', 'sessionMode'], label: 'Worker 会话模式', kind: 'select',
+        options: ['per-ticket', 'persistent'],
+        optionLabels: {
+          'per-ticket': '每条片新会话（per-ticket，推荐）',
+          persistent: '固定会话（persistent）',
+        },
+        hint: 'per-ticket = 每条视频一个干净会话、cwd 是工单目录；persistent = 沿用固定的 bili-faship 会话' },
+      { group: '节奏', path: ['admission', 'observeOnly'], label: '只观察（不渲染、不投稿）', kind: 'switch',
+        hint: '开 = 工单只做选题 + storyboard 草稿 + 依赖检查 + 计划，不渲染不投稿；用来先观察它的品味' },
+
+      // ── 工单与看门狗（§10.9）──
+      { group: '工单与看门狗', path: ['worker', 'autoRetry', 'enabled'], label: '失败自动重试', kind: 'switch',
+        hint: '对 render/job/stalled/宿主重启/投递失败自动再派工一次；B站风控（601/412/429）永不自动重试' },
+      { group: '工单与看门狗', path: ['worker', 'autoRetry', 'maxAttempts'], label: '自动重试上限', kind: 'number', min: 0, max: 5, step: 1,
+        hint: '0 = 不自动重试，0–5（默认 2）；用尽后转为「失败，等你」' },
+      { group: '工单与看门狗', path: ['watchdog', 'enabled'], label: '看门狗', kind: 'switch',
+        hint: '任务超时或长时间没有日志输出就结束它，并把工单标「卡住」等你处理' },
+      { group: '工单与看门狗', path: ['watchdog', 'maxJobMinutes'], label: '任务最长（分钟）', kind: 'number', min: 5, max: 240, step: 1,
+        hint: '5–240（默认 40）；超过就结束任务并标 failed' },
 
       // ── 发布与红线（§4 publish / autoPublish / redlines）──
       { group: '发布与红线', path: ['publish', 'enabled'], label: '允许投稿', kind: 'switch',
@@ -358,9 +467,10 @@ window.__ModuleLoader__.load({
     ]
 
     // 分组渲染顺序（DESIGN §8 的界面分区；不在表里的分组兜底排最后，不会消失）
-    const GROUP_ORDER = ['节奏', '发布与红线', '自审', '声音', '渲染与路径', '人物与素材']
+    const GROUP_ORDER = ['节奏', '工单与看门狗', '发布与红线', '自审', '声音', '渲染与路径', '人物与素材']
     const SECTION_HINTS = {
-      '节奏': '总开关 + 每 N 天 + 每天的叫醒窗口；两者都满足且到期才会自己叫醒。',
+      '节奏': '总开关 + 每 N 天 + 每天的叫醒窗口；两者都满足且到期、且今天工单没超限才会自己叫醒。',
+      '工单与看门狗': '工单串行（同时最多一个在制作）。看门狗负责收掉卡死的任务；B站风控类错误永不自动重试。',
       '发布与红线': '默认只出 dry 投稿包。红线由代码强制（只读）；真发 = allowGo 打开 + 调用方每次再显式 confirm。',
       '自审': '自审不通过（pass=false）的视频不允许投稿；评分线只是建议，不改变 pass。',
       '声音': '配音走 Edge TTS；音色格式宿主会校验（应形如 zh-CN-XiaoyiNeural）。',
@@ -446,7 +556,9 @@ window.__ModuleLoader__.load({
           value: cur,
           disabled,
           onChange: (e) => onChange(e.target.value),
-        }, opts.map((o) => h('option', { key: o, value: o }, o)))
+        }, opts.map((o) => h('option', { key: o, value: o },
+          // select 的值是配置里的代码；显示给人看的文字可另给 optionLabels（如 per-ticket / persistent）
+          (f.optionLabels && f.optionLabels[o]) || o)))
       } else if (f.kind === 'list') {
         control = h('input', {
           className: 'bf-input bf-wide',
@@ -476,8 +588,8 @@ window.__ModuleLoader__.load({
         control)
     }
 
-    // ── 状态卡（GET /status：到期 / 上次发布 / 待发 / 任务 / 依赖）──────────
-    function StatusCard({ status, meta, deps }) {
+    // ── 状态卡（GET /status：到期 / 上次发布 / 待发 / 任务 / 依赖 / 准入）────
+    function StatusCard({ status, meta, deps, tickets }) {
       const s = status || null
       const sch = (s && s.schedule) || null
       const jobs = s && Array.isArray(s.jobs) ? s.jobs.slice(0, 3) : []
@@ -486,6 +598,25 @@ window.__ModuleLoader__.load({
       const depItems = deps && Array.isArray(deps.items) ? deps.items : null
       const depBad = depItems ? depItems.filter((i) => !i.ok && !i.optional).length : null
       const report = (s && s.lastReport) || null
+      // v0.2：准入摘要（GET /tickets 的 admission 优先；老 status 上也有 admission.last 兜底）
+      const ticketData = tickets && typeof tickets === 'object' ? tickets : null
+      const admission = (ticketData && ticketData.admission) || (s && s.admission) || null
+      const admissionLast = admission && admission.last ? admission.last : null
+      const statusAttention = s && Number.isFinite(Number(s.needsAttention))
+        ? Number(s.needsAttention)
+        : (s && s.tickets
+          ? (Array.isArray(s.tickets.attention)
+            ? s.tickets.attention.length
+            : (Number.isFinite(Number(s.tickets.needsAttention)) ? Number(s.tickets.needsAttention) : null))
+          : null)
+      const attentionCount = ticketData && Array.isArray(ticketData.attention)
+        ? ticketData.attention.length : statusAttention
+      const openFromList = ticketData && Array.isArray(ticketData.tickets)
+        ? ticketData.tickets.filter(isOpenTicket).length : null
+      const openTickets = s && s.tickets && Number.isFinite(Number(s.tickets.open))
+        ? Number(s.tickets.open) : openFromList
+      const todayCount = admission && Number.isFinite(Number(admission.todayCount)) ? Number(admission.todayCount) : null
+      const maxPerDay = admission && Number.isFinite(Number(admission.maxPerDay)) ? Number(admission.maxPerDay) : null
 
       return h('div', { className: 'bf-card' },
         h('div', { className: 'bf-badges' },
@@ -495,6 +626,12 @@ window.__ModuleLoader__.load({
           h('span', { className: 'bf-badge' }, '上次发布：' + (s && s.lastPublishedAt ? fmtAgo(s.lastPublishedAt) : '从未')),
           h('span', { className: 'bf-badge', 'data-tone': pending.length ? 'warn' : undefined }, '待发：' + pending.length + ' 条'),
           h('span', { className: 'bf-badge' }, '成片：' + (s ? (Number(s.videos) || 0) : 0)),
+          todayCount != null || maxPerDay != null
+            ? h('span', { className: 'bf-badge' }, '今日工单 ' + String(todayCount == null ? 0 : todayCount) + '/' + String(maxPerDay == null ? '?' : maxPerDay))
+            : null,
+          attentionCount
+            ? h('span', { className: 'bf-badge', 'data-tone': 'bad' }, '待你处理：' + attentionCount + ' 条')
+            : null,
           jobs.length ? h('span', { className: 'bf-badge', 'data-tone': 'warn' }, '任务：' + jobs.length + ' 个') : null,
           depBad == null
             ? h('span', { className: 'bf-badge' }, '依赖：未体检')
@@ -513,6 +650,13 @@ window.__ModuleLoader__.load({
               + (s.nextDueAt ? '下次到期 ' + fmtTime(s.nextDueAt) : (s.due ? '现在就可做' : '—'))),
             h('div', null, h('b', null, '叫醒'), '：上次 ' + fmtAgo(sch && sch.lastWakeAt)
               + (sch && sch.wakeable ? ' · 可叫醒' : ' · 当前不可叫醒')),
+            admissionLast
+              ? h('div', null, h('b', null, '上次准入'), '：' + admissionReasonText(admissionLast.reason)
+                + '（' + admissionDecisionText(admissionLast.decision)
+                + (admissionLast.kind ? ' · ' + String(admissionLast.kind) : '')
+                + ' · ' + fmtAgo(admissionLast.at) + '）')
+              : null,
+            openTickets != null ? h('div', null, h('b', null, '开放工单'), '：' + openTickets + ' 个') : null,
             last ? h('div', null, h('b', null, '上一条'), '：' + (last.title || last.slug || '(未命名)')
               + (last.bvid ? ' · ' + last.bvid : '')) : null,
             report && report.updatedAt ? h('div', null, h('b', null, '最后汇报'), '：' + fmtTime(report.updatedAt) + '（' + String(report.bytes || 0) + ' 字节）') : null,
@@ -663,6 +807,106 @@ window.__ModuleLoader__.load({
           : h('span', { className: 'bf-badge' }, '真发未授权'))
     }
 
+    // ── v0.2「待你处理」：attention 为空时整块不渲染（super-agent：健康状态不占注意力）──
+    function AttentionBlock({ attention, busy, onAction }) {
+      const list = Array.isArray(attention) ? attention.filter(Boolean) : []
+      if (list.length === 0) return null
+      const busyTicket = String(busy || '').indexOf('ticket:') === 0
+      return h('div', { className: 'bf-attn' },
+        h('div', { className: 'bf-attn-title' }, '待你处理（' + list.length + '）'),
+        list.map((a) => h('div', {
+          key: String(a.ticketId || a.id || '') + ':' + String(a.kind || '') + ':' + String(a.since || ''),
+          className: 'bf-attn-item',
+        },
+        h('div', { className: 'bf-attn-head' },
+          h('span', { className: 'bf-attn-name' }, ticketTitle(a)),
+          h('span', { className: 'bf-badge', 'data-tone': 'warn' }, attentionKindLabel(a.kind)),
+          a.since ? h('span', { className: 'bf-badge', 'data-tone': 'muted' }, '自 ' + fmtAgo(a.since)) : null),
+        a.detail ? h('div', { className: 'bf-attn-detail', title: String(a.detail) }, String(a.detail)) : null,
+        h('div', { className: 'bf-attn-actions' },
+          attentionActions(a).indexOf('retry') >= 0
+            ? h('button', {
+              className: 'bf-btn2',
+              disabled: Boolean(busy),
+              onClick: () => onAction(a.ticketId || a.id, 'retry', '重试'),
+            }, busyTicket ? '处理中…' : '重试')
+            : null,
+          attentionActions(a).indexOf('ack') >= 0
+            ? h('button', {
+              className: 'bf-btn2',
+              disabled: Boolean(busy),
+              onClick: () => onAction(a.ticketId || a.id, 'ack', '标记已读'),
+            }, '我知道了')
+            : null))))
+    }
+
+    // ── v0.2 工单行（阶段 / 尝试次数 / 目录 / 可折叠时间线 / 重试·停止）────
+    function TicketRow({ t, busy, eventsOpen, onToggleEvents, onAction }) {
+      const title = ticketTitle(t)
+      const label = ticketStageLabel(t)
+      const tone = ticketStageTone(t)
+      const events = Array.isArray(t.events) ? t.events.slice(0, MAX_TICKET_EVENTS) : []
+      const open = isOpenTicket(t)
+      const busyTicket = String(busy || '').indexOf('ticket:') === 0
+      return h('div', { className: 'bf-ticket' },
+        h('div', { className: 'bf-ticket-head' },
+          h('span', { className: 'bf-badge', 'data-tone': tone }, label),
+          h('span', { className: 'bf-ticket-title' }, title),
+          t.short ? h('span', { className: 'bf-ticket-meta' }, String(t.short)) : null,
+          Number.isFinite(Number(t.attempts)) ? h('span', { className: 'bf-badge' }, '第 ' + Number(t.attempts) + ' 次') : null),
+        h('div', { className: 'bf-ticket-meta' },
+          t.dir ? '目录：' + String(t.dir) : '目录：—',
+          t.updatedAt ? ' · 更新 ' + fmtAgo(t.updatedAt) : '',
+          t.endedAt ? ' · 结束 ' + fmtAgo(t.endedAt) : ''),
+        (open || events.length)
+          ? h('div', { className: 'bf-ticket-actions' },
+            open ? h('button', {
+              className: 'bf-btn2',
+              disabled: Boolean(busy),
+              onClick: () => onAction(t.id, 'retry', '重试'),
+            }, busyTicket ? '处理中…' : '重试') : null,
+            open ? h('button', {
+              className: 'bf-btn2',
+              disabled: Boolean(busy),
+              onClick: () => onAction(t.id, 'stop', '停止'),
+            }, '停止') : null,
+            events.length ? h('button', {
+              className: 'bf-btn2',
+              onClick: () => onToggleEvents(t.id),
+            }, eventsOpen ? '收起时间线' : '时间线（' + events.length + '）') : null)
+          : null,
+        eventsOpen && events.length
+          ? h('div', { className: 'bf-events' }, events.map((e, i) => h('div', {
+            key: String(e.at || '') + ':' + String(e.type || '') + ':' + i,
+            className: 'bf-event',
+          }, '· ' + fmtAgo(e.at) + ' · ' + String(e.type || '?') + (e.detail ? ' — ' + String(e.detail) : ''))))
+          : null)
+    }
+
+    // ── v0.2 工单列表（最近 10 条；整块可折叠）──────────────────────────
+    function TicketsBlock({ tickets, busy, openIds, onToggleEvents, onAction, listOpen, onToggleList }) {
+      const data = tickets && typeof tickets === 'object' ? tickets : null
+      const list = data && Array.isArray(data.tickets) ? data.tickets.slice(0, 10) : null
+      const policy = data && data.policyVersion ? ' · policy ' + String(data.policyVersion) : ''
+      return h('div', { className: 'bf-sec' },
+        h('div', { className: 'bf-group' }, '工单' + (list ? '（最近 ' + list.length + ' 条）' : '') + policy),
+        h('button', { className: 'bf-sec-toggle', onClick: onToggleList }, listOpen ? '收起工单列表 ▲' : '展开工单列表 ▼'),
+        listOpen
+          ? (list === null
+            ? h('div', { className: 'bf-hint' }, '读取工单…')
+            : list.length === 0
+              ? h('div', { className: 'bf-hint' }, '还没有工单 —— 到点自动触发、或点「现在做一条」会建第一条。')
+              : h('div', { className: 'bf-tickets' }, list.map((t) => h(TicketRow, {
+                key: String(t.id || t.short),
+                t,
+                busy,
+                eventsOpen: Boolean(openIds && openIds[String(t.id || t.short)]),
+                onToggleEvents,
+                onAction,
+              }))))
+          : null)
+    }
+
     // ══════════════════════════════════════════════════════════════════════
     // Section —— 设置页正文
     // ══════════════════════════════════════════════════════════════════════
@@ -685,6 +929,10 @@ window.__ModuleLoader__.load({
       const [busy, setBusy] = useState('')
       const [err, setErr] = useState('')
       const [out, setOut] = useState('')
+      // v0.2：工单 / 准入（GET /tickets）
+      const [tickets, setTickets] = useState(null)
+      const [ticketsOpen, setTicketsOpen] = useState(true)
+      const [ticketEvents, setTicketEvents] = useState({})
 
       // ── 读取 ──────────────────────────────────────────────────────────
       const loadSettings = async () => {
@@ -715,28 +963,38 @@ window.__ModuleLoader__.load({
         }
         return r
       }
+      // v0.2：工单 / 待你处理 / 准入（DESIGN §10.8）
+      const loadTickets = async () => {
+        const r = await jget('/tickets')
+        if (!r || typeof r !== 'object') throw new Error('工单接口返回不是对象')
+        setTickets(r)
+        return r
+      }
       const reloadAll = async () => {
         setBusy('reload'); setErr(''); setOut('')
         try {
           await loadSettings()
           await loadStatus()
           await loadVideos()
-          setOut('✓ 已重新读取：配置 / 状态 / 视频列表')
+          await loadTickets()
+          setOut('✓ 已重新读取：配置 / 状态 / 视频列表 / 工单')
         } catch (e) { setErr('重新读取失败：' + msgOf(e)) } finally { setBusy('') }
       }
 
-      // ── 首次加载 + 状态轮询（15 秒；只读 /status，很便宜）───────────────
+      // ── 首次加载 + 轮询（15 秒；只读 /status + /tickets，很便宜）────────────
       useEffect(() => {
         let gone = false
         const boot = async () => {
           try { await loadSettings() } catch (e) { if (!gone) setErr('读取配置失败：' + msgOf(e)); return }
           try { await loadStatus() } catch (e) { if (!gone) setErr('读取状态失败：' + msgOf(e)) }
           try { await loadVideos() } catch (e) { if (!gone) setErr('读取视频列表失败：' + msgOf(e)) }
+          try { await loadTickets() } catch (e) { if (!gone) setErr('读取工单失败：' + msgOf(e)) }
         }
         boot()
         const timer = setInterval(() => {
           if (gone || !alive.current) return
           loadStatus().catch(() => { /* 轮询抖动不打扰用户 */ })
+          loadTickets().catch(() => { /* 同上：错误在用户点「重新读取」时才打扰 */ })
         }, 15000)
         return () => { gone = true; clearInterval(timer) }
       }, [])
@@ -789,13 +1047,45 @@ window.__ModuleLoader__.load({
         setBusy('wake'); setErr(''); setOut('')
         try {
           const r = await jpost('/wake', {})
-          setOut('✓ 已经叫醒（会话 ' + String((r && r.sessionId) || 'bili-faship')
-            + '，' + fmtTime(r && r.at) + '）\n进度看上面的状态卡「任务」，成片出来会进「成片列表」。')
+          const tk = r && r.ticket
+          setOut('✓ 已经叫醒'
+            + (tk ? '（工单 ' + String(tk.id || tk.short || '') + (tk.title ? '：' + String(tk.title) : '') + '）' : '')
+            + '\n会话：' + String((r && r.sessionId) || 'bili-faship') + ' · ' + fmtTime(r && r.at)
+            + '\n进度看上面的「工单」列表和状态卡「任务」；成片出来会进「成片列表」。')
           await loadStatus()
+          await loadTickets()
         } catch (e) {
           const m = msgOf(e)
           setErr('叫醒失败：' + m + (/503/.test(m) ? '\n宿主说 sessionController 拿不到 —— 叫醒功能要在 DSH 里跑，且调度器已激活。' : ''))
         } finally { setBusy('') }
+      }
+
+      // ── 工单动作（POST /tickets：retry 重试 / ack 我知道了 / stop 停止）────
+      //   retry 与 stop 会改变执行（派工/结束任务）⇒ 必须二次确认；ack 只是清掉提醒，不用确认。
+      const onTicketAction = async (id, action, label) => {
+        const tid = String(id || '')
+        if (!tid) { setErr('工单缺少 id，没法操作'); return }
+        const what = label || (action === 'retry' ? '重试' : action === 'stop' ? '停止' : '标记已读')
+        if (action === 'retry') {
+          if (!askConfirm('重试工单：会清掉这条工单的「待你处理」，并重新派工叫醒 agent 继续做（不受窗口/冷却限制，但仍受「有任务在跑」约束）。\n\n确定重试吗？')) return
+        } else if (action === 'stop') {
+          if (!askConfirm('停止工单：会把它结案为「已停止」；如果它的任务正在跑，会先结束任务。\n\n确定停止吗？')) return
+        }
+        setBusy('ticket:' + tid + ':' + String(action || '')); setErr(''); setOut('')
+        try {
+          const r = await postTicketAction(tid, action)
+          let text = '✓ 工单已' + what + '：' + tid
+          if (r && r.ticket) {
+            text += '\n' + String(r.ticket.title || r.ticket.short || '')
+              + '（当前阶段：' + String(r.ticket.stageLabel || r.ticket.stage || '?') + '）'
+          }
+          if (r && r.sessionId) text += '\n会话：' + String(r.sessionId)
+          if (r && r.detail) text += '\n' + String(r.detail)
+          if (r && r.error) text += '\n' + String(r.error)
+          setOut(text)
+          await loadTickets()
+          await loadStatus()
+        } catch (e) { setErr('工单' + what + '失败：' + msgOf(e)) } finally { setBusy('') }
       }
 
       // ── 渲染 / 投稿包（POST /jobs；不是真发）───────────────────────────
@@ -911,7 +1201,10 @@ window.__ModuleLoader__.load({
           h('code', null, (meta && meta.configPath) || '配置文件'),
           '（页面没显示的字段保存时原样保留）。'),
 
-        h(StatusCard, { status, meta, deps }),
+        h(StatusCard, { status, meta, deps, tickets }),
+
+        // v0.2「待你处理」：attention 为空时组件返回 null（整块不渲染，健康状态不占注意力）
+        h(AttentionBlock, { attention: tickets && tickets.attention, busy, onAction: onTicketAction }),
 
         err ? h('div', { className: 'bf-err' }, err) : null,
         out ? h('div', { className: 'bf-out' }, out) : null,
@@ -925,6 +1218,17 @@ window.__ModuleLoader__.load({
           ? h('div', { className: 'bf-warn' },
             '⚠️ 真发授权已打开（autoPublish.allowGo=true）—— 之后任何一次带 confirm 的真发调用都会真的投稿到 B 站。发完建议马上关掉；本页没有「一键真发」按钮。')
           : null,
+
+        // v0.2「工单」：最近 10 条，整块可折叠 + 每行时间线可折叠
+        h(TicketsBlock, {
+          tickets,
+          busy,
+          openIds: ticketEvents,
+          listOpen: ticketsOpen,
+          onToggleList: () => setTicketsOpen((v) => !v),
+          onToggleEvents: (id) => setTicketEvents((prev) => ({ ...prev, [String(id)]: !prev[String(id)] })),
+          onAction: onTicketAction,
+        }),
 
         ordered.map(renderGroup),
         leftovers.map(renderGroup),
@@ -974,6 +1278,7 @@ window.__ModuleLoader__.load({
       listToText,
       saveBody,
       postSave,
+      postTicketAction,
       payloadError,
       mediaDir,
       mediaUrl,
@@ -984,11 +1289,25 @@ window.__ModuleLoader__.load({
       indexStateText,
       jobLabel,
       fieldKey,
+      // v0.2 工单 / 待你处理 / 准入
+      attentionKindLabel,
+      ticketStage,
+      ticketStageLabel,
+      ticketStageTone,
+      ticketTitle,
+      isOpenTicket,
+      admissionReasonText,
+      admissionDecisionText,
+      attentionActions,
+      MAX_TICKET_EVENTS,
       FieldRow,
       StatusCard,
       VideosBlock,
       CredentialsBlock,
       ActionsBar,
+      AttentionBlock,
+      TicketRow,
+      TicketsBlock,
     }
     return module.exports
   },

@@ -264,10 +264,49 @@ test('FIELDS 覆盖 DESIGN §4 的全部配置项（' + DESIGN_SECTION4_KEYS.len
   assert.deepEqual(missing, [], 'DESIGN §4 里这些配置项没出现在设置页：' + missing.join(', '))
 })
 
-test('FIELDS 覆盖任务的界面分区：节奏 / 发布与红线 / 自审 / 声音 / 渲染与路径 / 人物与素材', () => {
-  assert.deepEqual(MOD.GROUP_ORDER.slice(), ['节奏', '发布与红线', '自审', '声音', '渲染与路径', '人物与素材'])
+test('FIELDS 覆盖任务的界面分区：节奏 / 工单与看门狗 / 发布与红线 / 自审 / 声音 / 渲染与路径 / 人物与素材', () => {
+  assert.deepEqual(MOD.GROUP_ORDER.slice(),
+    ['节奏', '工单与看门狗', '发布与红线', '自审', '声音', '渲染与路径', '人物与素材'])
   const groups = new Set(MOD.FIELDS.map((f) => f.group))
   for (const g of MOD.GROUP_ORDER) assert.ok(groups.has(g), '分组里一个字段都没有：' + g)
+})
+
+/** DESIGN §10.9 的 v0.2 配置增量（7 项，path 严格一致）。 */
+const DESIGN_TICKET_CONFIG_KEYS = [
+  'tickets.maxPerDay',
+  'worker.sessionMode',
+  'admission.observeOnly',
+  'worker.autoRetry.enabled',
+  'worker.autoRetry.maxAttempts',
+  'watchdog.enabled',
+  'watchdog.maxJobMinutes',
+]
+
+test('v0.2 FIELDS：§10.9 的 7 条新配置路径齐全、分组/形状正确', () => {
+  const byKey = new Map(MOD.FIELDS.map((f) => [fieldKey(f), f]))
+  const missing = DESIGN_TICKET_CONFIG_KEYS.filter((k) => !byKey.has(k))
+  assert.deepEqual(missing, [], '缺 v0.2 配置项：' + missing.join(', '))
+
+  // 前三个进「节奏」，后四个在新组「工单与看门狗」（task-4 要求）
+  const rhythm = ['tickets.maxPerDay', 'worker.sessionMode', 'admission.observeOnly']
+  for (const k of rhythm) assert.equal(byKey.get(k).group, '节奏', k + ' 应在「节奏」组')
+  for (const k of DESIGN_TICKET_CONFIG_KEYS.slice(3)) {
+    assert.equal(byKey.get(k).group, '工单与看门狗', k + ' 应在「工单与看门狗」组')
+  }
+
+  assert.equal(byKey.get('tickets.maxPerDay').kind, 'number')
+  assert.equal(byKey.get('tickets.maxPerDay').min, 1)
+  assert.equal(byKey.get('tickets.maxPerDay').max, 10)
+  assert.equal(byKey.get('worker.sessionMode').kind, 'select')
+  assert.deepEqual(byKey.get('worker.sessionMode').options, ['per-ticket', 'persistent'])
+  assert.equal(byKey.get('admission.observeOnly').kind, 'switch')
+  assert.ok(/选题|storyboard|不渲染/.test(byKey.get('admission.observeOnly').hint), 'observeOnly 的 hint 要说明只观察')
+  assert.equal(byKey.get('worker.autoRetry.enabled').kind, 'switch')
+  assert.equal(byKey.get('worker.autoRetry.maxAttempts').min, 0)
+  assert.equal(byKey.get('worker.autoRetry.maxAttempts').max, 5)
+  assert.equal(byKey.get('watchdog.enabled').kind, 'switch')
+  assert.equal(byKey.get('watchdog.maxJobMinutes').min, 5)
+  assert.equal(byKey.get('watchdog.maxJobMinutes').max, 240)
 })
 
 // ════════════════════════════════════════════════════════════════════════
@@ -448,6 +487,183 @@ test('scheduleReason / indexStateText / jobLabel：都有中文解释，未知�
 })
 
 // ════════════════════════════════════════════════════════════════════════
+// 6.5 v0.2 工单 / 待你处理 / 准入（DESIGN §10）
+// ════════════════════════════════════════════════════════════════════════
+test('AttentionBlock：为空时整块不渲染（null）；非空渲染中文 kind + 重试/我知道了', () => {
+  assert.equal(I.AttentionBlock({ attention: [], busy: '', onAction() {} }), null)
+  assert.equal(I.AttentionBlock({ attention: null, busy: '', onAction() {} }), null)
+
+  const calls = []
+  const now = new Date().toISOString()
+  const el = I.AttentionBlock({
+    attention: [
+      {
+        ticketId: 'tk-1', short: 'day3-a', title: '第三天：站在中间', kind: 'rate-limited',
+        detail: '任务日志出现 601：B站要求人工验证。', since: now, actions: ['retry', 'ack'],
+      },
+      {
+        ticketId: 'tk-2', short: 'day4-b', title: '第四天：换气', kind: 'review-failed',
+        detail: '自审未过（ai_label）', since: null, actions: ['ack'],
+      },
+      {
+        ticketId: 'tk-3', short: 'day5-c', title: '第五天：投稿', kind: 'publish-failed',
+        detail: '后台投稿失败：网络超时', since: now, actions: ['ack', 'stop'],
+      },
+    ],
+    busy: '',
+    onAction: (id, action, label) => calls.push([id, action, label]),
+  })
+  const text = textOf(el)
+  assert.ok(text.includes('待你处理（3）'))
+  assert.ok(text.includes('B站风控待人工'), 'rate-limited 要显示中文')
+  assert.ok(text.includes('自审未过'), 'review-failed 要显示中文')
+  assert.ok(text.includes('投稿失败'), 'publish-failed 要显示中文')
+  assert.ok(text.includes('第三天：站在中间'))
+  assert.ok(text.includes('自 刚刚') || text.includes('自 '), 'since 要有时间提示')
+  const buttons = nodesOfType(el, 'button')
+  const labels = buttons.map((n) => textOf(n))
+  assert.ok(labels.includes('重试'))
+  assert.ok(labels.includes('我知道了'))
+  // 第一条点「重试」→ 回调带上 ticketId / action / label
+  buttons[labels.indexOf('重试')].props.onClick()
+  assert.deepEqual(calls[0], ['tk-1', 'retry', '重试'])
+  // 第三条 host actions=['ack','stop']：待你处理区只给 ack —— stop 只在工单行（task-4 要求）
+  const rows = walk(el).filter((n) => n.type === 'div' && n.props.className === 'bf-attn-item')
+  assert.equal(rows.length, 3)
+  const row3Buttons = nodesOfType(rows[2], 'button').map((n) => textOf(n))
+  assert.ok(row3Buttons.includes('我知道了'))
+  assert.ok(!row3Buttons.includes('停止'), '「待你处理」里不提供 stop（只在工单行提供）')
+})
+
+test('工单阶段中文映射：person/review→等你审阅、working/running→制作中、done/published→已发布', () => {
+  assert.ok(I.ticketStageLabel({ stage: 'person/review' }).includes('等你审阅'))
+  assert.equal(I.ticketStageLabel({ stage: 'working/running' }), '制作中')
+  assert.equal(I.ticketStageLabel({ stage: 'done/published' }), '已发布')
+  assert.equal(I.ticketStageLabel({ stage: 'person/failed' }).includes('失败'), true)
+  assert.equal(I.ticketStageTone({ stage: 'person/review' }), 'warn')
+  assert.equal(I.ticketStageTone({ stage: 'working/running' }), 'info')
+  assert.equal(I.ticketStageTone({ stage: 'idle' }), 'muted')
+  assert.equal(I.ticketStageTone({ stage: 'done/published' }), 'good')
+  assert.equal(I.ticketStageTone({ stage: 'done/failed' }), 'bad')
+  // host 给了 stageLabel 就以 host 为准（客户端只显示，不自己判断阶段）
+  assert.equal(I.ticketStageLabel({ stage: 'person/review', stageLabel: '待你定稿' }), '待你定稿')
+  // 未知阶段原样显示，不猜
+  assert.equal(I.ticketStageLabel({ stage: 'something/new' }), 'something/new')
+  assert.equal(I.isOpenTicket({ stage: 'working/running' }), true)
+  assert.equal(I.isOpenTicket({ stage: 'person/review' }), true)
+  assert.equal(I.isOpenTicket({ stage: 'done/published' }), false)
+})
+
+test('准入原因 / 决定中文映射（§10.3 的代码）', () => {
+  assert.equal(I.admissionReasonText('accept'), '可以开始')
+  assert.equal(I.admissionReasonText('due'), '到期可做')
+  assert.equal(I.admissionReasonText('not-due'), '没到期')
+  assert.equal(I.admissionReasonText('out-of-window'), '不在窗口')
+  assert.equal(I.admissionReasonText('cooldown'), '冷却中')
+  assert.equal(I.admissionReasonText('daily-limit'), '今日额度用完')
+  assert.equal(I.admissionReasonText('job-running'), '有任务在跑')
+  assert.equal(I.admissionReasonText('ticket-working'), '工单进行中')
+  assert.equal(I.admissionReasonText('index-corrupt'), '投稿索引损坏')
+  assert.equal(I.admissionReasonText('weird-code'), 'weird-code')
+  assert.equal(I.admissionDecisionText('accept'), '接受')
+  assert.equal(I.admissionDecisionText('reject'), '拒绝')
+})
+
+test('postTicketAction：POST /tickets body={id,action}，失败抛错（不静默）', async () => {
+  const calls = []
+  const origFetch = globalThis.fetch
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, init })
+    return { ok: true, status: 200, json: async () => ({ ok: true, ticket: { id: 'tk-1' } }) }
+  }
+  try {
+    const r = await I.postTicketAction('tk-1', 'retry')
+    assert.deepEqual(r, { ok: true, ticket: { id: 'tk-1' } })
+    assert.equal(calls.length, 1)
+    assert.equal(calls[0].url, '/dsh-bili-faship/api/tickets')
+    assert.equal(calls[0].init.method, 'POST')
+    assert.equal(calls[0].init.credentials, 'same-origin')
+    assert.deepEqual(JSON.parse(calls[0].init.body), { id: 'tk-1', action: 'retry' })
+  } finally {
+    globalThis.fetch = origFetch
+  }
+
+  // 失败（400 + {ok:false,error}）必须抛错 —— UI 会显示出来
+  globalThis.fetch = async () => ({ ok: false, status: 400, json: async () => ({ ok: false, error: '工单已结束' }) })
+  try {
+    await assert.rejects(() => I.postTicketAction('tk-1', 'ack'), /工单已结束（HTTP 400）/)
+  } finally {
+    globalThis.fetch = origFetch
+  }
+})
+
+test('TicketsBlock：阶段标签/尝试次数/目录/折叠时间线/行内重试与停止', () => {
+  const now = new Date().toISOString()
+  const tickets = {
+    ok: true,
+    policyVersion: '0.2.0',
+    tickets: [
+      {
+        id: 'tk-1', short: 'day3-a', title: '第三天：站在中间', dir: 'C:/videos/day3-a',
+        stage: 'working/running', attempts: 2, createdAt: now, updatedAt: now, endedAt: null,
+        events: [
+          { at: now, type: 'dispatched', detail: 'session=bili-faship-day3-a' },
+          { at: now, type: 'report', detail: 'progress' },
+        ],
+        attention: [], report: { status: 'progress' }, outcome: null,
+      },
+      {
+        id: 'tk-2', short: 'day2-b', title: '第二天：吃鱼', dir: 'C:/videos/day2-b',
+        stage: 'done/published', attempts: 1, createdAt: now, updatedAt: now, endedAt: now,
+        events: [], attention: [], report: null, outcome: { kind: 'published', at: now },
+      },
+    ],
+    attention: [],
+    admission: { todayCount: 1, maxPerDay: 2, last: null, recent: [] },
+  }
+  const calls = []
+  const el = expand(I.TicketsBlock({
+    tickets,
+    busy: '',
+    openIds: { 'tk-1': true },
+    listOpen: true,
+    onToggleList() {},
+    onToggleEvents: (id) => calls.push(['events', id]),
+    onAction: (id, action) => calls.push([id, action]),
+  }))
+  const text = textOf(el)
+  assert.ok(text.includes('工单（最近 2 条）'))
+  assert.ok(text.includes('policy 0.2.0'))
+  assert.ok(text.includes('制作中'))
+  assert.ok(text.includes('已发布'))
+  assert.ok(text.includes('第 2 次'), '应显示尝试次数')
+  assert.ok(text.includes('C:/videos/day3-a'))
+  assert.ok(text.includes('dispatched'), '展开的工单要显示时间线事件')
+  assert.ok(text.includes('收起时间线'))
+
+  const rows = walk(el).filter((n) => n.type === 'div' && n.props.className === 'bf-ticket')
+  assert.equal(rows.length, 2)
+  const openButtons = nodesOfType(rows[0], 'button').map((n) => textOf(n))
+  assert.ok(openButtons.includes('重试'))
+  assert.ok(openButtons.includes('停止'))
+  const doneButtons = nodesOfType(rows[1], 'button').map((n) => textOf(n))
+  assert.ok(!doneButtons.includes('重试'), '已结束工单不该有重试')
+  assert.ok(!doneButtons.includes('停止'), '已结束工单不该有停止')
+
+  // 点「停止」→ 回调 (id, 'stop')；点「时间线」→ 回调 toggle
+  nodesOfType(rows[0], 'button').filter((n) => textOf(n) === '停止')[0].props.onClick()
+  assert.deepEqual(calls[0], ['tk-1', 'stop'])
+
+  // 整块折叠时不渲染工单行
+  const collapsed = expand(I.TicketsBlock({
+    tickets, busy: '', openIds: {}, listOpen: false,
+    onToggleList() {}, onToggleEvents() {}, onAction() {},
+  }))
+  assert.ok(textOf(collapsed).includes('展开工单列表'))
+  assert.ok(!textOf(collapsed).includes('制作中'))
+})
+
+// ════════════════════════════════════════════════════════════════════════
 // 7. 组件冒烟（不跑副作用；只验证渲染不抛错、关键内容在）
 // ════════════════════════════════════════════════════════════════════════
 test('FieldRow：六种 kind 都能渲染（含 range/select/list/switch/只读）', () => {
@@ -528,6 +744,20 @@ test('Section：配置读回来后完整渲染（状态卡/全部分组/凭据/�
     '',                                     // busy
     '',                                     // err
     '',                                     // out
+    {                                       // v0.2 tickets（attention 为空 ⇒ 不渲染「待你处理」）
+      ok: true,
+      policyVersion: '0.2.0',
+      tickets: [{
+        id: 'tk-1', short: 'day3-a', title: '第三条：站在中间', dir: 'C:/videos/day3-a',
+        stage: 'working/running', stageLabel: '制作中', attempts: 1,
+        createdAt: now, updatedAt: now, endedAt: null, events: [], attention: [],
+        report: { status: 'progress' }, outcome: null,
+      }],
+      attention: [],
+      admission: { todayCount: 1, maxPerDay: 2, last: null, recent: [] },
+    },
+    true,                                   // ticketsOpen
+    {},                                     // ticketEvents
   ])
   const plugin = loadPlugin({ react })
   let el = null
@@ -558,8 +788,47 @@ test('Section：配置读回来后完整渲染（状态卡/全部分组/凭据/�
   const pwds = nodesOfType(el, 'input').filter((n) => n.props.type === 'password')
   assert.equal(pwds.length, 3)
   assert.ok(pwds.every((n) => n.props.value === ''))
+  // v0.2：工单块要渲染；attention 为空 ⇒「待你处理」整块不出现（健康状态不占注意力）
+  assert.ok(text.includes('工单（最近 1 条）'), '应有工单列表')
+  assert.ok(text.includes('制作中'), '工单阶段要中文显示')
+  assert.ok(text.includes('今日工单 1/2'), '状态卡应有今日工单 N/max')
+  assert.ok(!text.includes('待你处理'), 'attention 为空时不该渲染「待你处理」块')
   // cfg 与 savedJson 一致 ⇒ 没有「未保存」提示
   assert.ok(!text.includes('有改动还没保存'))
+})
+
+test('Section：attention 非空时顶部渲染「待你处理」+ 中文 kind + 重试/我知道了', () => {
+  const now = new Date().toISOString()
+  const react = makeReactWithState([
+    {}, '{}',                                  // cfg / savedJson
+    null, null, null, null,                    // meta / status / deps / videos
+    '', '', '', {},                            // videoRoot / selectedDir / expanded / reviews
+    { sessdata: '', bili_jct: '', buvid3: '' },// creds
+    '', '', '',                                // busy / err / out
+    {                                          // tickets：1 条 attention
+      ok: true,
+      policyVersion: '0.2.0',
+      tickets: [{
+        id: 'tk-1', short: 'day3-a', title: '第三天', dir: 'C:/videos/day3-a',
+        stage: 'person/failed', attempts: 2, updatedAt: now, events: [],
+      }],
+      attention: [{
+        ticketId: 'tk-1', short: 'day3-a', title: '第三天',
+        kind: 'stalled', detail: '任务 40 分钟没有新日志', since: now, actions: ['retry', 'ack'],
+      }],
+      admission: { todayCount: 2, maxPerDay: 2, last: null, recent: [] },
+    },
+    true,                                      // ticketsOpen
+    {},                                        // ticketEvents
+  ])
+  const plugin = loadPlugin({ react })
+  const text = textOf(expand(plugin.mod.Section()))
+  assert.ok(text.includes('待你处理（1）'), '有 attention 时顶部要渲染「待你处理」')
+  assert.ok(text.includes('卡住'), 'stalled 应映射成中文')
+  assert.ok(text.includes('重试'))
+  assert.ok(text.includes('我知道了'))
+  assert.ok(text.includes('失败，等你'), 'person/failed 阶段要中文显示')
+  assert.ok(text.includes('今日工单 2/2'))
 })
 
 test('危险开关在 UI 上真的会先 confirm：取消时不动配置（fail-closed）', () => {
@@ -603,12 +872,28 @@ test('StatusCard：到期 / 上次发布 / 待发 / 任务 / 依赖 / 调度原�
     },
     meta: { configPath: 'C:/cfg.json', videoRoot: 'C:/videos', pluginRoot: 'X:/plug', version: '0.1.0' },
     deps: { ok: false, items: [{ name: 'stickers', ok: false, optional: true, detail: '缺表情包' }] },
+    tickets: {
+      ok: true,
+      policyVersion: '0.2.0',
+      tickets: [],
+      attention: [{ ticketId: 'tk-1', kind: 'stalled' }, { ticketId: 'tk-2', kind: 'review-failed' }],
+      admission: {
+        todayCount: 1,
+        maxPerDay: 2,
+        last: { at: now, kind: 'schedule', decision: 'reject', reason: 'daily-limit', checks: {} },
+        recent: [],
+      },
+    },
   })
   const text = textOf(el)
   assert.ok(text.includes('到点了'), '应显示到期')
   assert.ok(text.includes('上次发布：从未'))
   assert.ok(text.includes('待发：1 条'))
   assert.ok(text.includes('成片：2'))
+  assert.ok(text.includes('今日工单 1/2'), '状态卡要显示今日工单 N/max')
+  assert.ok(text.includes('待你处理：2 条'), '有 attention 时状态卡要提示条数')
+  assert.ok(text.includes('上次准入：今日额度用完'), '准入 reason 要映射成中文')
+  assert.ok(text.includes('拒绝'), '准入决定要显示中文')
   assert.ok(text.includes('任务：1 个'))
   assert.ok(text.includes('任务 渲染 · running'), '任务列表应显示中文动作名')
   assert.ok(text.includes('窗口内'))
@@ -703,8 +988,8 @@ test('样式：只注入一个 <style>，类名全部 bf- 前缀，颜色只用 
   }
 })
 
-test('只走 DESIGN §5 的路由（settings/status/videos/deps/cookie/jobs/wake/media/report）', () => {
-  for (const route of ['/settings', '/status', '/videos', '/deps', '/cookie', '/jobs', '/wake']) {
+test('只走 DESIGN §5 的路由（settings/status/videos/deps/cookie/jobs/wake/media/report/tickets）', () => {
+  for (const route of ['/settings', '/status', '/videos', '/deps', '/cookie', '/jobs', '/wake', '/tickets']) {
     assert.ok(SOURCE.includes("'" + route + "'"), '缺路由：' + route)
   }
   assert.ok(SOURCE.includes('/media?dir='), '封面/播放/自审都走 /media')

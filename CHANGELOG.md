@@ -1,6 +1,78 @@
 # CHANGELOG · dsh-bili-faship（鲸鱼娘视频工坊）
 
-版本号跟 `package.json` 走。当前 `0.1.0`。
+版本号跟 `package.json` 走。当前 `0.2.0`。
+
+---
+
+## 0.2.0 — 2026-11-07 · 工单模型（借鉴 DeepSeek Super-agent）
+
+**这一版给「叫醒 → 干活」加上了身份、记录和恢复能力。** 结构上借鉴了 DeepSeek 官方研究原型
+`dsh-superagent-prototype`（MIT）的 Source → Trigger → Eval → Ticket → Executor → Report → Panel 模型，
+但只借**结构**、不搬规模与实现：我们仍然只有一台机器、一个时钟、一条流水线。
+学习笔记见 [`docs/SUPERAGENT-NOTES.md`](docs/SUPERAGENT-NOTES.md)；契约见 `DESIGN.md` §10。
+
+**① 工单（Ticket）**
+- 一次「做一条视频」现在是一个有 id、有目录、有会话、有尝试次数、有时间线的工单，落在
+  `<DSH_HOME>/bili-faship/tickets.json`（只保留最近 50 个工单 / 50 条准入记录，原子写盘）。
+- **阶段由宿主按证据推导**，客户端只显示：`person/delivery`、`person/blocked`、`person/failed`、
+  `person/review`（需要人）、`working/queued`、`working/running`（在跑）、`idle`（等下一次触发）、
+  `done/published|dropped|stopped|failed`（已结案）。
+- 每个工单有事件时间线（`admitted / dispatched / report / job-started / job-finished / attention / retry / ack / stopped / ended`）。
+
+**② 准入（Admission，确定性闸门）**
+- 建工单前按顺序检查：总开关 → 生物钟开关 → 投稿索引是否损坏 → 有没有后台任务在跑 →
+  有没有工单正在做 → 今日工单数是否达 `tickets.maxPerDay`（默认 2）→ 是否到期 → 是否在窗口 → 冷却。
+- 第一条失败即记录原因（`index-corrupt / job-running / ticket-working / daily-limit / not-due /
+  out-of-window / cooldown / disabled / schedule-off`）；**不调 LLM、不花 token、可解释**。
+- 每次 accept、手动触发、以及「到期却因为窗口/冷却/限额没做」都写一条 admission 记录；
+  完全没到期的 tick 不记录（安静）。
+
+**③ Worker 会话模式**
+- 新设置 `worker.sessionMode`，默认 **`per-ticket`**：会话 id = `bili-faship-<short>`，cwd = 工单目录。
+  每条片一个干净上下文，记忆走文件（日记 / 报告 / 工单历史），不让会话无限长大。
+- 可选 `persistent`：沿用 v0.1 的固定会话 `bili-faship` + `<DSH_HOME>/faship-work`。
+- 投递成功写 `dispatched` 事件、`attempts += 1`；投递失败挂 `delivery-failed` attention，下个 tick 重试（不 ++attempts）。
+
+**④ 结构化报告 `faship_report`**
+- 新工具 `faship_report { ticket, status, note? }`，status ∈ `progress | waiting | ready | blocked | failed | dropped`。
+- 宿主据此推阶段/生成 attention/结案：`dropped` 直接结案（不发消息）、`blocked/failed` 进入「待你处理」、
+  `ready` 进入 `person/review`（等人决定发布）。
+- **不解析自由文本**：「在等人」必须来自结构化字段。
+
+**⑤ 看门狗与恢复（Watchdog / Recovery）**
+- 每 60 秒 tick 顺带检查运行中任务：超过 `watchdog.maxJobMinutes`（默认 40）或
+  `watchdog.idleMinutes`（默认 8）无日志增长 → 结束子进程、任务标 `failed`（note 写明 watchdog）、工单挂 `stalled` attention。
+- 插件启动时：`jobs.json` 里遗留的 running 标 `interrupted`；开放工单若在 `working/*` 却没有活任务 →
+  挂 `host-restarted` attention；下一次派工带**恢复说明**（先检查目录，别重复已完成的步骤）。
+
+**⑥ 自动重试**
+- `worker.autoRetry.enabled`（默认 true）：只对执行/投递类失败（`render-failed / publish-failed / job-failed /
+  stalled / host-restarted / delivery-failed`）在 `maxAttempts`（默认 2）内按 `backoffMinutes`（默认 10）退避重试；
+  次数用尽转 `person/failed`。
+- **`review-failed` 不自动重试**（内容问题，等人或 agent 手动改）；**平台风控（601/412/429）永不自动重试**（红线）。
+
+**⑦ 设置页「待你处理」面板**
+- 顶部新增三块：**待你处理**（attention 列表，带「重试 / 我知道了」；为空时整块隐藏）、
+  **工单**（最近工单：阶段标签、尝试次数、目录、折叠时间线）、**准入**（今日工单数 / 上限、最近一次 accept/reject 原因）。
+- 新增 7 项设置：`tickets.maxPerDay`、`worker.sessionMode`、`worker.autoRetry.enabled`、
+  `worker.autoRetry.maxAttempts`、`watchdog.enabled`、`watchdog.maxJobMinutes`、`admission.observeOnly`。
+
+**⑧ 观察模式 `admission.observeOnly`**
+- 打开后仍然建工单、仍然叫醒，但 mandate 标 `observeOnly`：worker 只做「选题 + storyboard 草稿 + 依赖检查 + 计划」，
+  **禁止 render / publish**，把"如果放开会怎么做"写进汇报。先看它想做什么，再决定放不放权。
+
+**⑨ API / 工具增量**
+- HTTP：`GET /tickets`（工单 + 阶段 + attention + 准入摘要）、`POST /tickets`（`retry / ack / stop`）；
+  `GET /status` 增加 `tickets:{open,attention}` 与 `admission.last`。
+- 工具：`faship_tickets {}`、`faship_report {ticket,status,note?}`、`faship_ticket_action {id,action}`；
+  `faship_status` 增加 `needsAttention`；`faship_wake` 改为「建 manual 工单 + 派工」。
+
+**⑩ 兼容与文档**
+- v0.1 的 `/settings`、`/status` 字段全部保留；旧配置无需迁移（新字段有默认值）。
+- 新增 `docs/SUPERAGENT-NOTES.md`；`README.md` 增加「工单 / 待你处理 / 准入 / 观察模式 / 看门狗」一节，
+  `VIDEO-CAPABILITY.md` 增加阶段表 / 准入闸门 / 看门狗重试 / 结构化报告，`docs/PLUGIN.md` 补工单与面板实现，
+  `prompts/wake.md` 对齐新的工单叫醒词。
+- 单测新增工单/准入/阶段推导/看门狗/重试/面板数据等用例；**真投稿仍然不测**。
 
 ---
 

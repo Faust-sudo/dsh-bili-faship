@@ -275,6 +275,50 @@ test('api: POST /wake 在拿不到 sessionController 时回 503（不假装成�
   assert.match(r.body.reason, /session-controller/)
 })
 
+test('api: POST /wake 有 sessionController 时建 manual 工单并派工（v0.2）', async () => {
+  writeCfg({})
+  fs.rmSync(path.join(DSH, 'bili-faship', 'tickets.json'), { force: true })
+  const prompts = []
+  const sessionController = {
+    async create() { return { sessionId: 'x' } },
+    async prompt(req) { prompts.push(req); return { ok: true } },
+  }
+  const r = await call({ method: 'POST', path: '/wake', body: { reason: '测试' }, ctx: makeCtx({ sessionController }) })
+  assert.equal(r.status, 200, JSON.stringify(r.body))
+  assert.equal(r.body.ok, true)
+  assert.ok(r.body.ticket?.id)
+  assert.equal(prompts.length, 1)
+  assert.match(prompts[0].content[0].text, /工单/)
+
+  const tickets = await call({ path: '/tickets' })
+  assert.equal(tickets.status, 200)
+  assert.ok(Array.isArray(tickets.body.attention))
+  assert.ok(tickets.body.tickets.some((t) => t.id === r.body.ticket.id))
+  assert.ok(tickets.body.admission)
+
+  // ack 一个工单动作
+  const ack = await call({ method: 'POST', path: '/tickets', body: { id: r.body.ticket.id, action: 'ack' } })
+  assert.equal(ack.status, 200, JSON.stringify(ack.body))
+  assert.equal(ack.body.ok, true)
+  // stop 结案
+  const stop = await call({ method: 'POST', path: '/tickets', body: { id: r.body.ticket.id, action: 'stop' } })
+  assert.equal(stop.status, 200, JSON.stringify(stop.body))
+  assert.equal(stop.body.ticket.outcome.kind, 'stopped')
+  // 未知动作
+  const bad = await call({ method: 'POST', path: '/tickets', body: { id: r.body.ticket.id, action: 'boom' } })
+  assert.equal(bad.status, 400)
+  fs.rmSync(path.join(DSH, 'bili-faship', 'tickets.json'), { force: true })
+})
+
+test('api: GET /status 带 needsAttention / tickets / admission（v0.2）', async () => {
+  writeCfg({})
+  const r = await call({ path: '/status' })
+  assert.equal(r.status, 200)
+  assert.equal(typeof r.body.needsAttention, 'number')
+  assert.ok(r.body.tickets && typeof r.body.tickets.open === 'number')
+  assert.ok(r.body.admission === null || typeof r.body.admission === 'object')
+})
+
 test('api: 根路径返回 API 摘要', async () => {
   const r = await call({ path: '/' })
   assert.equal(r.status, 200)

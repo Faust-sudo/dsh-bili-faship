@@ -34,7 +34,7 @@ const cfgMod = await import('../lib/config.mjs')
 const statusMod = await import('../lib/status.mjs')
 const promptMod = await import('../lib/prompt.mjs')
 const dirsMod = await import('../lib/dirs.mjs')
-const schedMod = await import('../lib/scheduler.mjs')
+const ticketsMod = await import('../lib/tickets.mjs')
 
 const writeCfg = (videoPatch) => {
   fs.writeFileSync(CFG, JSON.stringify({ version: 1, video: { outDir: VIDEO_ROOT, ...videoPatch } }, null, 2))
@@ -149,25 +149,25 @@ test('schedule: dueNow —— 没有 index = 到期；刚发过 = 没到期；�
   const cfg = { cadenceDays: 3 }
   const indexFile = path.join(VIDEO_ROOT, 'index.json')
   try { fs.rmSync(indexFile, { force: true }) } catch {}
-  let r = schedMod.dueNow(cfg)
+  let r = ticketsMod.dueNow(cfg)
   assert.equal(r.due, true)
   assert.equal(r.reason, 'never-published')
 
   const now = new Date()
   const recent = new Date(now.getTime() - 1 * 86400_000).toISOString()
   fs.writeFileSync(indexFile, JSON.stringify({ version: 1, videos: [], lastPublishedAt: recent }))
-  r = schedMod.dueNow(cfg)
+  r = ticketsMod.dueNow(cfg)
   assert.equal(r.due, false)
   assert.equal(r.reason, 'not-due')
 
   const old = new Date(now.getTime() - 4 * 86400_000).toISOString()
   fs.writeFileSync(indexFile, JSON.stringify({ version: 1, videos: [], lastPublishedAt: old }))
-  r = schedMod.dueNow(cfg)
+  r = ticketsMod.dueNow(cfg)
   assert.equal(r.due, true)
   assert.ok(r.nextDueAt)
 
   fs.writeFileSync(indexFile, '{ broken json')
-  r = schedMod.dueNow(cfg)
+  r = ticketsMod.dueNow(cfg)
   assert.equal(r.due, false, '坏账本不能当成"从未发布"')
   assert.equal(r.reason, 'index-corrupt')
   fs.rmSync(indexFile, { force: true })

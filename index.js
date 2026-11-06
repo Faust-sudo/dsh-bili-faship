@@ -26,7 +26,8 @@ import { loadHostDeps } from './lib/hostdeps.mjs'
 import { registerTools } from './lib/tools.mjs'
 import { handleApi, API_PREFIX } from './lib/api.mjs'
 import { startScheduler } from './lib/scheduler.mjs'
-import { initJobs, disposeJobs } from './lib/jobs.mjs'
+import { initJobs, disposeJobs, setJobListener } from './lib/jobs.mjs'
+import { handleJobEvent, reconcileTickets } from './lib/tickets.mjs'
 import { tryNodeRuntime } from './lib/node-runtime.mjs'
 import { mergedConfig, CONFIG_FILE, videoRoot } from './lib/config.mjs'
 import { DSH_HOME } from './tools/lib/paths.mjs'
@@ -65,6 +66,13 @@ export default {
 
     // 0) 任务状态机：读 jobs.json，把上次遗留的 running 标 interrupted
     try { initJobs() } catch (e) { log('初始化任务队列失败：' + e.message) }
+    // 0.1) 任务事件 → 工单（失败/601 会写成「待你处理」）
+    try { setJobListener(handleJobEvent) } catch (e) { log('挂任务事件监听失败：' + e.message) }
+    // 0.2) 工单对账（重启前遗留的 open 工单 → host-restarted）
+    try {
+      const changed = reconcileTickets({ graceMinutes: 30 })
+      if (changed.length) log(`工单对账：${changed.length} 个标记为待处理`)
+    } catch (e) { log('工单对账失败：' + e.message) }
 
     // 1) 工具（faship_status / render / review / publish / job / wake / deps / videos / config）
     if (hostDeps.defineTool) {

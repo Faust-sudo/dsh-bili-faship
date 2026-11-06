@@ -101,6 +101,24 @@ export const VIDEO_DEFAULTS = {
   },
   // 真发总闸：allowGo 默认关；即使打开，工具/HTTP 还要求调用方显式 confirm:true
   autoPublish: { dryRun: true, allowGo: false },
+  // ── v0.2：工单 / 准入 / worker 会话 / 看门狗（DESIGN §10.9，借鉴 super-agent）──
+  tickets: {
+    maxPerDay: 2, // 每天最多建几个工单（准入闸门）
+  },
+  worker: {
+    // per-ticket = 每条片一个干净会话（默认，v0.2 起）；persistent = 沿用固定会话 bili-faship
+    sessionMode: 'per-ticket',
+    autoRetry: { enabled: true, maxAttempts: 2, backoffMinutes: 10 },
+  },
+  watchdog: {
+    enabled: true,
+    maxJobMinutes: 40, // 任务总时长上限
+    idleMinutes: 8, // 日志多久没长就算卡住
+  },
+  admission: {
+    // true = 只做选题与 storyboard 草稿，不渲染、不投稿（先观察几轮再放开）
+    observeOnly: false,
+  },
 }
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)

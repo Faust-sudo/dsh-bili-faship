@@ -26,9 +26,11 @@ const PKG = JSON.parse(fs.readFileSync(PKG_PATH, 'utf8'))
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8')
 const exists = (rel) => fs.existsSync(path.join(ROOT, rel))
 
-/** 模板里写的是 `<plugin>/api/*`；DESIGN §5 的路由清单在这里集中一份。 */
+/** 模板里写的是 `<plugin>/api/*`；DESIGN §5 的路由清单在这里集中一份（v0.2 加了 /tickets）。 */
 const API_BASE = '/dsh-bili-faship/api'
-const API_ROUTES = ['/settings', '/status', '/videos', '/deps', '/cookie', '/jobs', '/wake', '/report', '/media']
+const API_ROUTES = ['/settings', '/status', '/videos', '/deps', '/cookie', '/jobs', '/tickets', '/wake', '/report', '/media']
+/** v0.2 新增的工单工具（DESIGN §10.8） */
+const TICKET_TOOLS = ['faship_tickets', 'faship_report', 'faship_ticket_action']
 
 /** 读宿主侧全部源码（index.js + lib/ 下的 .mjs），拼成一段文本给路由断言用。 */
 function hostSource() {
@@ -156,20 +158,40 @@ test('宿主：publish-go 的三重闸门字样在源码中出现', () => {
   assert.match(src, /publish-go|publish_go|publishGo/, '必须出现 publish-go 动作')
 })
 
+test('v0.2：工单模型的路由与工具都在宿主源码里', () => {
+  const src = hostSource()
+  // 路由在 api.mjs 里分发；/tickets 是 GET + POST
+  assert.ok(src.includes('/tickets'), '缺少 /tickets 路由')
+  assert.match(src, /ticketAction|POST \/tickets|sub === '\/tickets'/, '/tickets 应同时支持查询与动作')
+  // 工具注册在 lib/tools.mjs；名字必须与 DESIGN §10.8 一致
+  for (const name of TICKET_TOOLS) {
+    assert.ok(src.includes(name), `缺少工具注册：${name}`)
+  }
+  // 阶段推导 / attention / 准入是 v0.2 的核心；至少有实现迹象
+  for (const keyword of ['person/', 'working/', 'attention', 'policyVersion']) {
+    assert.ok(src.includes(keyword), `v0.2 工单模型缺少实现迹象：${keyword}`)
+  }
+})
+
 // ── 5. 交付物齐不齐 ────────────────────────────────────────────────────────
 test('文档与自检文件齐全', () => {
   for (const rel of [
     'README.md', 'CHANGELOG.md', 'LICENSE', 'NOTICE.md', 'VIDEO-CAPABILITY.md',
-    'docs/PLUGIN.md', 'docs/video-storyboard.md', 'docs/video-publish.md',
+    'docs/PLUGIN.md', 'docs/SUPERAGENT-NOTES.md', 'docs/video-storyboard.md', 'docs/video-publish.md',
     'prompts/charter.md', 'prompts/wake.md', 'selfcheck.mjs',
   ]) {
     assert.ok(exists(rel), `缺少交付文件：${rel}`)
   }
 })
 
-test('README 讲到了安装 / 回滚 / 601 / 红线 / 数据位置', () => {
+test('CHANGELOG 记录当前 package.json 版本', () => {
+  const changelog = read('CHANGELOG.md')
+  assert.ok(changelog.includes(`## ${PKG.version} `), `CHANGELOG 里没有当前版本（${PKG.version}）的条目`)
+})
+
+test('README 讲到了安装 / 回滚 / 601 / 红线 / 数据位置 / 工单', () => {
   const readme = read('README.md')
-  for (const keyword of ['安装', '回滚', '601', '红线', '数据在哪', '视频工坊', 'faship_']) {
+  for (const keyword of ['安装', '回滚', '601', '红线', '数据在哪', '视频工坊', 'faship_', '工单', '待你处理', '准入']) {
     assert.ok(readme.includes(keyword), `README 缺少必要章节/关键词：${keyword}`)
   }
 })
