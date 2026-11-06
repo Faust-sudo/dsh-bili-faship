@@ -1,0 +1,60 @@
+{
+  "name": "dsh-bili-faship",
+  "version": "0.1.0",
+  "description": "鲸鱼娘视频工坊：让 DSH 里的 agent 自己构思 → 写 storyboard → 配音/逐帧渲染 → 代码自审 → 投稿 B 站。设置页「视频工坊」+ 每 N 天到点自己醒来做片 + faship_* 工具。红线代码强制：AI 标注 / 不冒充真人 / 不搬运未标注片段 / 不刷量不群发。",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "bilibili",
+    "video",
+    "agent",
+    "storyboard"
+  ],
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib",
+    "tools",
+    "docs",
+    "prompts",
+    "cordis.patch.yml",
+    "README.md",
+    "CHANGELOG.md",
+    "VIDEO-CAPABILITY.md",
+    "DESIGN.md",
+    "selfcheck.mjs",
+    "tests",
+    "LICENSE",
+    "NOTICE.md"
+  ],
+  "engines": {
+    "node": ">=18",
+    "dsh": ">=0.1.7-rc.1"
+  },
+  "scripts": {
+    "test": "node --test \"tests/*.test.mjs\"",
+    "selfcheck": "node selfcheck.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-settings-plugins"
+      ]
+    }
+  },
+  "license": "MIT"
+}

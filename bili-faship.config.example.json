@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "video": {
+    "enabled": true,
+    "outDir": "",
+    "cadenceDays": 3,
+    "minDurationSec": 15,
+    "maxDurationSec": 180,
+    "voice": {
+      "voice": "zh-CN-XiaoyiNeural",
+      "rate": "+8%",
+      "pitch": "+8Hz"
+    },
+    "selfReview": {
+      "enabled": true,
+      "passScore": 80,
+      "minSubtitleCoverage": 0.9,
+      "loudnessRange": [-20, -12],
+      "requireAiLabel": true,
+      "requireRedlineCard": false,
+      "maxClipSec": 3
+    },
+    "publish": {
+      "enabled": true,
+      "dryRunByDefault": true,
+      "selfApprove": true,
+      "profile": "ugcfx/bup",
+      "tid": 138,
+      "partitionName": "生活·日常",
+      "copyright": 1,
+      "noReprint": true,
+      "tags": [],
+      "titlePrefix": ""
+    },
+    "redlines": {
+      "requireAiLabel": true,
+      "forbidImpersonation": true,
+      "forbidSpam": true,
+      "forbidUncreditedClips": true,
+      "bannedWords": ["政治敏感", "赌博", "色情", "诈骗", "代实名", "刷量"]
+    },
+    "persona": {
+      "name": "大肥鱼",
+      "ownerTitle": "主人",
+      "selfClaim": "我"
+    },
+    "materials": {
+      "diary": [
+        "D:/bilibili-scroll/bili_whale/whale-diary.md",
+        "D:/bilibili-scroll/bili_whale/whale-diary-private.md"
+      ],
+      "extraNotes": []
+    },
+    "paths": {
+      "stickers": "",
+      "cache": "",
+      "python": "",
+      "ffmpeg": ""
+    },
+    "schedule": {
+      "enabled": true,
+      "window": { "start": "21:00", "end": "23:30" },
+      "minGapMinutes": 10,
+      "cooldownHours": 30
+    },
+    "autoPublish": {
+      "dryRun": true,
+      "allowGo": false
+    }
+  }
+}

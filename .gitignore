@@ -1,0 +1,8 @@
+# 运行时/本机产物（插件装好后这些东西都在 <DSH_HOME>/bili-faship 下，不在这里）
+node_modules/
+.cache/
+videos/
+*.log
+*.tmp
+.DS_Store
+Thumbs.db

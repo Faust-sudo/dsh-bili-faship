@@ -1,0 +1,37 @@
+BGM 素材清单与许可说明（轻快 lo-fi / 电子小律动）
+=================================================
+
+文件: soft-groove.mp3
+标题: Soft Groove (104 BPM, Cmaj7–Am7–Fmaj7–G6 loop)
+来源: 程序合成，无任何外部采样、无第三方素材。
+      mp3 由同目录生成脚本产出的 soft-groove.wav 用 ffmpeg(libmp3lame 128kbps/48kHz) 转码而来，
+      原始 wav 不复入库（体积大）；生成器: generate-soft-groove.py（纯 numpy，固定随机种子，可复现）
+许可: CC0 1.0 Universal (Public Domain Dedication)
+      https://creativecommons.org/publicdomain/zero/1.0/
+署名: 不要求。若要标注可写 "BGM: generated (CC0)"。
+商用: 允许，可自由修改/分发，无署名义务。
+
+规格:
+  采样率 48000 Hz / MP3 128 kbps / 立体声
+  速度 104.0 BPM（24 小节 × 4/4）
+  时长 55.42 s（由 55.385 s 的无缝循环 wav 转码）
+  集成响度 -28.0 LUFS（原始 wav 用 ffmpeg ebur128 实测；mp3 转码后基本一致）
+  真峰值   -12.7 dBFS（无削波风险）
+  和弦进行 Cmaj7 – Am7 – Fmaj7 – G6，每和弦 2 小节，8 小节一循环 × 3
+  无重低音、无人声、无抢戏主旋律；适合垫在人声下方
+
+循环方式（无缝）:
+  - 原始 wav 的所有乐器 release 尾巴都渲染到 loop 之后，再折返叠加回开头；
+  - mp3 编码会在首尾各引入极短静音/编码延迟（约 20–50ms），
+    视频里由 ffmpeg `-stream_loop -1` + 淡入淡出处理，不会出现明显断口。
+  - 视频更长时直接循环：`-stream_loop -1 -i soft-groove.mp3`
+
+生成/转码命令（可复现）:
+  python tools/video/assets/bgm/generate-soft-groove.py --gain-db=-9.5   # 得到 wav
+  ffmpeg -i soft-groove.wav -codec:a libmp3lame -b:a 128k -ar 48000 -ac 2 soft-groove.mp3
+
+混音建议:
+  - 文件本身约 -28 LUFS；混音给 0.72 增益（-2.85 dB）后约 -30.8 LUFS，
+    人声约 -16 LUFS 时 BGM 约低 14–15 LU，属"轻垫"档；如需更明显可提到 0.85–1.0。
+
+若替换本目录音频，请同步更新本 LICENSE.txt（来源链接/许可证/署名要求）。

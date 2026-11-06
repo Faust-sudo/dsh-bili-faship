@@ -1,0 +1,27 @@
+SFX 素材清单与许可说明（程序合成，CC0）
+========================================
+
+文件:
+  pop.wav     140 ms / 48 kHz / 16-bit / mono   / 峰值 -8.0 dBFS / 13,484 bytes
+  whoosh.wav  300 ms / 48 kHz / 16-bit / stereo / 峰值 -8.0 dBFS / 57,644 bytes
+  ding.wav    380 ms / 48 kHz / 16-bit / mono   / 峰值 -9.0 dBFS / 36,524 bytes
+
+用途:
+  pop.wav    文字/卡片弹出（起音 ~37 ms，150 ms 内收干净，首尾采样为 0 无爆音）
+  whoosh.wav 转场/卡片滑入（噪声亮度上升扫频：功率质心 ~451 → 875 → 1866 → 4091 Hz）
+  ding.wav   重点/结论提示（E6 1318.5 Hz 柔和钟声，-20 dB 衰减约 369 ms）
+
+来源: 本目录 generate-sfx.py 程序合成，纯 numpy，无任何外部采样/第三方素材。
+许可: CC0 1.0 Universal (Public Domain Dedication)
+      https://creativecommons.org/publicdomain/zero/1.0/
+署名: 不要求。商用/修改/分发均可。
+
+生成命令（可复现）:
+  python tools/video/assets/sfx/generate-sfx.py
+
+备注:
+- 三个音效均为"短、干净、音量低"，峰值 ≤ -6 dBFS，单个 < 100 KB。
+- 混音建议：在 -16 LUFS 人声 + -28 LUFS BGM 的成片里，SFX 保持原样即可；
+  若觉得 pop/ding 不够明显，可 +3~4 dB（仍 ≤ -2 dBFS）。
+
+若替换本目录音频，请同步更新本 LICENSE.txt（来源链接/许可证/署名要求）。
