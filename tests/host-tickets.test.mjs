@@ -150,6 +150,7 @@ test('ticket: dispatch 记录 session/attempts；报告 ready 进「等你审阅
   assert.equal(ctx.prompts.length, 1)
   assert.match(ctx.prompts[0].content[0].text, new RegExp(t.id))
   assert.match(ctx.prompts[0].content[0].text, /faship_report/)
+  assert.match(ctx.prompts[0].content[0].text, /插件目录（文档都在这里）/)
   const pub1 = tk.getTicketPublic(t.id)
   assert.equal(pub1.attempts, 1)
   assert.equal(pub1.sessionId, r.sessionId)
@@ -204,6 +205,23 @@ test('ticket: 证据推导 attention —— 自审没过 / 成片就绪 / ack �
   tk.resetTicketsCache()
   att = tk.listAttention()
   assert.equal(att.filter((a) => a.ticketId === t.id).length, 0)
+})
+
+test('ticket: 报告 ready + 产物就绪时，ack 要同时压住两种表示（不会又冒出来）', async () => {
+  writeCfg({})
+  const t = tk.createTicket({ kind: 'manual', reason: 'ready+artifacts' })
+  writeJson(path.join(t.dir, 'storyboard.json'), { version: 4, slug: 'both-ready', title: '双证据' })
+  writeJson(path.join(t.dir, 'review.json'), { pass: true, score: 100, reviewedAt: new Date().toISOString() })
+  writeJson(path.join(t.dir, 'publish.json'), { dryRun: true, title: '双证据' })
+  fs.writeFileSync(path.join(t.dir, 'video.mp4'), 'x')
+  tk.recordReport({ ticketId: t.id, status: 'ready', note: '都好了' })
+  let att = tk.listAttention().filter((a) => a.ticketId === t.id)
+  assert.ok(att.some((a) => a.kind === 'ready-for-review'))
+  const ack = tk.ackTicket(t.id)
+  assert.equal(ack.ok, true)
+  tk.resetTicketsCache()
+  att = tk.listAttention().filter((a) => a.ticketId === t.id)
+  assert.equal(att.length, 0, JSON.stringify(att))
 })
 
 // ---------------------------------------------------------------------------

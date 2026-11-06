@@ -250,7 +250,11 @@ v0.2 新增的 7 项设置（分在「节奏」和「工单与看门狗」两组
 | `ready-for-review` | 成片 + 自审 + dry 包都好了，等你决定发布 | 我知道了 |
 
 **看门狗（watchdog）**：每 60 秒 tick 检查每个运行中任务——超过 `watchdog.maxJobMinutes`（默认 40 分钟）
-或 `watchdog.idleMinutes`（默认 8 分钟）日志没增长 → 结束子进程、任务标 `failed`、工单挂 `stalled` attention。
+→ 结束子进程、任务标 `failed`、工单挂 `stalled` attention。
+`watchdog.idleMinutes` 默认 **0（关闭空闲检测）**：渲染器的逐帧进度不会转发到宿主日志，8 分钟没日志会把正常长渲染误杀；
+只在确认任务会持续输出时才调大。
+同一 tick 还会做**存活检查（liveness）**：开放工单 20 分钟没有新事件、也不属于任何运行中任务 → 挂 `stalled`
+（60 分钟内不重复）——兜底「插件重载/会话已结束，但工单还显示制作中」。
 宿主启动时还会把 `jobs.json` 里遗留的 `running` 标成 `interrupted`，并给「开放但没在跑」的工单挂
 `host-restarted`。
 

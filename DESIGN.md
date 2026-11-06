@@ -389,8 +389,11 @@ body：`{ action: "plan"|"render"|"review"|"publish-dry"|"publish-go", dir?, top
 ### 12.6 看门狗与恢复（Watchdog / Recovery）
 
 - 插件每 60s tick 顺带：对每个 running 任务检查「最后日志增长时间」与「已运行时长」；
-  超过 `watchdog.maxJobMinutes`（默认 40）或 `watchdog.idleMinutes`（默认 8）无输出 →
-  结束子进程、任务标 `failed`（note 写明 watchdog）、工单 attention `stalled`。
+  超过 `watchdog.maxJobMinutes`（默认 40）→ 结束子进程、任务标 `failed`（note 写明 watchdog）、工单 attention。
+  `watchdog.idleMinutes` 默认 **0（关闭）**：渲染器的逐帧进度不会转发到宿主日志，8 分钟没日志会把正常长渲染误杀，
+  只有确认任务会持续输出时才调大（>0）。
+- **存活检查（liveness，每 tick）**：开放工单 20 分钟没有新事件、也不属于任何运行中任务 → attention `stalled`
+  （60 分钟内不重复；ack 后 60 分钟内也不再提）。这是「插件重载/会话已结束，但工单还显示制作中」的兜底。
 - 插件启动时：`jobs.json` 里遗留 running → `interrupted`（已有行为）；开放工单若在 `working/*` 但没有活任务 →
   attention `host-restarted`，并写事件；下一次派工带恢复说明。
 - **自动重试**（`worker.autoRetry.enabled`，默认 true）：attention ∈
@@ -429,7 +432,7 @@ worker: {
   sessionMode: "per-ticket",            // per-ticket | persistent
   autoRetry: { enabled: true, maxAttempts: 2, backoffMinutes: 10 }
 },
-watchdog: { enabled: true, maxJobMinutes: 40, idleMinutes: 8 },
+watchdog: { enabled: true, maxJobMinutes: 40, idleMinutes: 0 },
 admission: { observeOnly: false }
 ```
 

@@ -29,6 +29,7 @@
 - 工单号：{{ticket.id}}
 - 工单目录（你的工作目录）：{{ticket.dir}}
 - 视频根目录：{{videoRoot}}
+- 插件目录（文档都在这里）：{{pluginRoot}}
 - CLI（用真 node 跑）：node "{{cliPath}}"
 - 今天：{{now}}（Asia/Shanghai）
 - 上次发布：{{lastPublished}}
@@ -46,7 +47,7 @@
 2. **选题**：从日记里找一件**具体**的事（具体时间、具体的人、具体的一句话），不要抽象感想
    （具体 > 抽象，自嘲 > 元气，摆烂 > 励志）。
 3. **写 storyboard**：`plan --dir "{{ticket.dir}}" --topic "一句话主题"`，再自己改 storyboard.json
-   （12 场左右、每场 2–3 秒；字段见 `docs/video-storyboard.md`、内容指南见 `prompts/charter.md`）。
+   （12 场左右、每场 2–3 秒；字段见 `{{pluginRoot}}/docs/video-storyboard.md`、内容指南见 `{{pluginRoot}}/prompts/charter.md`）。
    大字（shout/stamp）和旁白不要重复同一句。
 4. **渲染**：`render --dir "{{ticket.dir}}"`（1080p 约 3–4 分钟；也可用工具 faship_render 起后台任务再轮询 faship_job）。
 5. **自审**：`review --dir "{{ticket.dir}}"` —— **必须 pass**；不过就改，不要绕过代码闸门。

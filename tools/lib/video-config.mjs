@@ -112,8 +112,8 @@ export const VIDEO_DEFAULTS = {
   },
   watchdog: {
     enabled: true,
-    maxJobMinutes: 40, // 任务总时长上限
-    idleMinutes: 8, // 日志多久没长就算卡住
+    maxJobMinutes: 40, // 任务总时长上限（渲染的进度不会写进宿主日志，所以默认不做「空闲」判断）
+    idleMinutes: 0, // 0 = 关闭空闲检测；>0 时"日志多久没长"才算卡住（渲染器本身不转发进度，默认别开）
   },
   admission: {
     // true = 只做选题与 storyboard 草稿，不渲染、不投稿（先观察几轮再放开）

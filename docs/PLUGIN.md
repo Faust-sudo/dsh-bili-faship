@@ -81,9 +81,10 @@ API 前缀 `/dsh-bili-faship/api`，见 `DESIGN.md` §5。`index.js` 只注册�
 - 一个动作同时在跑 → `409 { ok:false, error:"已有任务在跑" }`。
 - 日志：`<DSH_HOME>/bili-faship/jobs/<jobId>.log`；状态：`jobs.json`（`running / done / failed / interrupted`）。
 - 进程退出码非 0 或写文件失败 → `failed`，**不会**把半成品当成成功。
-- **看门狗挂钩**（v0.2）：tick 时检查每个 running 任务的「已运行时长」与「最后日志增长时间」，
-  超过 `watchdog.maxJobMinutes`（默认 40）或 `watchdog.idleMinutes`（默认 8）→ 结束子进程、标 `failed`
-  （note 写明 watchdog）、工单挂 `stalled` attention。
+- **看门狗挂钩**（v0.2）：tick 时检查每个 running 任务的「已运行时长」；超过 `watchdog.maxJobMinutes`
+  （默认 40）→ 结束子进程、标 `failed`（note 写明 watchdog）、工单挂 `stalled` attention。
+  `watchdog.idleMinutes` 默认 0（关闭）——渲染器不把逐帧进度转发给宿主日志，空闲检测会误杀长渲染。
+  tick 里还有**存活检查**：开放工单 20 分钟无新事件且无活任务 → `stalled`（60 分钟去重）。
 - 插件停用 / DSH 退出时，`effect` 的清理函数负责收尾（残留的 `running` 标成 `interrupted`）。
 
 ### 生物钟（`lib/scheduler.mjs`，v0.2 三相位）
@@ -196,7 +197,7 @@ tools/video/
 ### 任务卡住 / 「已有任务在跑」
 
 - `GET /dsh-bili-faship/api/jobs`（或 `faship_job`）看状态与日志尾部；
-- **v0.2 先等看门狗**：运行超过 `watchdog.maxJobMinutes` 或 `watchdog.idleMinutes` 无日志增长 →
+- **v0.2 先等看门狗**：运行超过 `watchdog.maxJobMinutes`（或把 `idleMinutes` 调大后，日志长时间不增长）→
   任务会被标 `failed`（note 有 watchdog）并挂工单 attention；不需要手动 kill；
 - 真卡死且等不及：重启 DSH —— 重启后残留的 `running` 会被标成 `interrupted`，开放工单会拿到 `host-restarted`；
 - 任务在跑时准入**不会**建新工单（`job-running`），这是故意的。

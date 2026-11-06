@@ -196,8 +196,9 @@
 **看门狗**（`watchdog.enabled`，默认开）：
 
 - 每 60 秒 tick 检查每个运行中任务：超过 `watchdog.maxJobMinutes`（默认 40 分钟）
-  或 `watchdog.idleMinutes`（默认 8 分钟）日志没增长 → 结束子进程、任务标 `failed`（note 写明 watchdog）、
-  工单挂 `stalled` attention。
+  → 结束子进程、任务标 `failed`（note 写明 watchdog）、工单挂 `stalled` attention。
+  `watchdog.idleMinutes` 默认 **0（关闭）**——渲染器不转发逐帧进度，空闲检测会误杀长渲染；
+- 同一 tick 做**存活检查**：开放工单 20 分钟没有新事件、也不属于运行中任务 → `stalled`（60 分钟去重）；
 - 宿主启动时：`jobs.json` 里遗留 `running` → `interrupted`；开放工单若在 `working/*` 却没有活任务 →
   挂 `host-restarted` attention；下次派工带**恢复说明**（先检查目录，别重复已完成的步骤）。
 
