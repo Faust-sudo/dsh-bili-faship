@@ -76,6 +76,14 @@
 
 ---
 
+**审计修复（同版本内，2026-11-07）**
+
+- 看门狗空闲检测默认关闭（`watchdog.idleMinutes=0`）：渲染器不把逐帧进度转发到宿主日志，8 分钟没日志会误杀正常长渲染；总时长上限仍是 40 分钟。
+- 修复「成片就绪」ack 后又冒出来：报告 `ready` 与产物扫描两种表示现在会被同时压住。
+- 新增存活检查（liveness）：开放工单 20 分钟无新事件且没有运行中任务 → `stalled` attention（60 分钟去重），兜底插件重载后工单卡在「制作中」。
+- 叫醒词补插件目录与文档绝对路径（`worker.sessionMode=per-ticket` 时 cwd 是工单目录，相对路径找不到文档）。
+- `/jobs` 的 render 恢复透传 `width/height/fps`（重构时的回归）。
+- 新增 `scripts/e2e-ticket.mjs`：320×180 真机跑通「叫醒→plan→render→review→dry→report ready→attention→ack→stop」（36 秒，不属于测试套件）。
 ## 0.1.0 — 2026-11-06 · 首版
 
 **第一版：把原独立项目 `bili-faship` 的视频能力，正式做成一枚 DSH 插件。**
