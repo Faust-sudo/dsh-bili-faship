@@ -34,7 +34,7 @@ dsh-bili-faship/
 | `lib/node-runtime.mjs` / `lib/runtime.mjs` | 找「真 node」：`DSH_NODE` → desktop 运行时目录 → PATH → Electron + `ELECTRON_RUN_AS_NODE` 兜底 |
 | `lib/config.mjs` | 宿主侧配置：读 / 合并 / 校验 / 写；唯一真相仍是 `tools/lib/video-config.mjs` 的 `VIDEO_DEFAULTS` |
 | `lib/dirs.mjs` | 插件家目录（`<DSH_HOME>/bili-faship`）下的 jobs / schedule / report / workDir / tickets 路径 |
-| `lib/deps.mjs` | 依赖体检（必需：node / ffmpeg / Python+Pillow / BGM+SFX / 数据目录可写；可选：表情包 / 字体 / cookie / 日记） |
+| `lib/deps.mjs` | 依赖体检（必需：node / ffmpeg / Python+Pillow+numpy / BGM+SFX / 数据目录可写；可选：表情包 / 字体 / cookie / 日记） |
 | `lib/jobs.mjs` | 长任务队列：起子进程、写日志、状态机、重入保护；**看门狗挂钩**（tick 时检查超时/无输出并结束任务） |
 | `lib/tickets.mjs` | **v0.2 工单**：工单/准入记录的读写、阶段推导、attention、`retry/ack/stop`、派工状态（见下） |
 | `lib/status.mjs` | 「现在什么状态」的唯一口径（管线状态 + 视频列表 + 生物钟原因 + 工单摘要 + 汇报），设置页 / 工具 / 调度共用 |
@@ -84,8 +84,8 @@ API 前缀 `/dsh-bili-faship/api`，见 `DESIGN.md` §5。`index.js` 只注册�
 - **看门狗挂钩**（v0.2）：tick 时检查每个 running 任务的「已运行时长」；超过 `watchdog.maxJobMinutes`
   （默认 40）→ 结束子进程、标 `failed`（note 写明 watchdog）、工单挂 `stalled` attention。
   `watchdog.idleMinutes` 默认 0（关闭）——渲染器不把逐帧进度转发给宿主日志，空闲检测会误杀长渲染。
-  tick 里还有**存活检查**：开放工单 20 分钟无新事件且无活任务 → `stalled`（60 分钟去重）。
-- 插件停用 / DSH 退出时，`effect` 的清理函数负责收尾（残留的 `running` 标成 `interrupted`）。
+  tick 里还有**存活检查**：开放工单 45 分钟没有任何动静（事件 / 目录 / 产物 mtime）且无活任务 → `stalled`（60 分钟去重；`stalled` 不自动重试，只能人工 retry）。
+- 插件停用 / DSH 退出时，`effect` 的清理函数只关状态机、**不杀正在渲染的子进程**；下次启动 `loadState()` 会把遗留 `running` 标成 `interrupted`。
 
 ### 生物钟（`lib/scheduler.mjs`，v0.2 三相位）
 
@@ -99,7 +99,8 @@ API 前缀 `/dsh-bili-faship/api`，见 `DESIGN.md` §5。`index.js` 只注册�
 - `ctx.get('sessionController')` **懒取**，拿不到就显示「不可用」，不报错、不崩溃。
 - 会话模式：`worker.sessionMode=per-ticket`（默认）→ `create({ sessionId:"bili-faship-<short>", cwd:<工单目录> })`；
   `persistent` → v0.1 的 `bili-faship` + `<DSH_HOME>/faship-work`。
-- 投递成功写 `dispatched` 事件、`attempts += 1`；失败挂 `delivery-failed` attention，下个 tick 重试（不 ++attempts）。
+- 投递成功写 `dispatched` 事件、`attempts += 1`；失败也 `attempts += 1` 并挂 `delivery-failed` attention（有上限、有退避；用尽转「待你处理」）。
+- 宿主契约：`sessionController.prompt(request, signal)` 的第二个参数是 **AbortSignal**，漏传会 TypeError（见 `lib/tickets.mjs:dispatchTicket`）。
 - `POST /wake` 与 `faship_wake` 走同一条投递路径，但会先建**手动工单**（`basis=explicit`），不受窗口/冷却限制。
 
 ## 3. 设置页（`client.js`）
@@ -132,7 +133,7 @@ tools/video/
   render.mjs                   TTS → 时间轴/字幕 → Python 渲染 → 混音 → 合成（原子落盘）
   review.mjs                   7 项硬闸门 + 软检查 + 0–100 分
   publish.mjs                  dry 投稿包 / go 真发（B 站 web 上传流程 + 请求保护层）
-  renderer/{lib,cards,render}.py   逐帧渲染（Pillow）
+  renderer/{lib,cards,render}.py   逐帧渲染（Pillow + numpy）
   assets/{bgm,sfx}/            CC0 程序合成音频（附 LICENSE / 生成脚本）
 ```
 
@@ -188,7 +189,7 @@ tools/video/
 | 症状 | 先查 |
 |---|---|
 | `ffmpeg` 找不到 | `where ffmpeg`；或设置页填绝对路径 / `FFMPEG` env |
-| `Python + Pillow` 红 | `python -c "import PIL"`；或 `WHALE_PYTHON` 指向正确的解释器 |
+| `Python + Pillow + numpy` 红 | `python -c "import PIL, numpy"`；或 `WHALE_PYTHON` 指向正确的解释器 |
 | 表情包目录为空 | 默认路径 `~/.dsh/bili-whale/stickers/packs/大肥鱼` 是否存在；设置页改 `video.paths.stickers` |
 | TTS 没声音 / 渲染卡住 | Edge TTS 要联网；断网会失败（不会静默出无声片） |
 | 字幕覆盖不足 | 旁白太短或标点太少；加长句子 / 补标点 |

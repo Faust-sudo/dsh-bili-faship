@@ -1,9 +1,66 @@
 # CHANGELOG · dsh-bili-faship（鲸鱼娘视频工坊）
 
-版本号跟 `package.json` 走。当前 `0.2.0`。
+版本号跟 `package.json` 走。当前 `0.2.1`。
 
 ---
 
+## 0.2.1 — 2026-11-08 · 稳定性与发布就绪（全面审计的修复）
+
+**这一版修的是「161 个单测全绿但真实宿主里从来没叫醒过她」的那类问题。** 全量审计报告见
+本地审计报告（host / state / client / video / release 五份，不进仓库）。
+
+**① 叫醒链路（P0）**
+- 修 sessionController.prompt(request, signal) 漏传 AbortSignal：真实宿主第一行就 signal.throwIfAborted()，
+  v0.2.0 每次派工都 TypeError，生物钟/「现在做一条」/工单重试全部静默失败。
+- 派工失败也计一次 attempts（原先只在成功时 +1 → delivery-failed 每 10 分钟无限重试、maxAttempts 形同虚设）。
+- 准入阶段推导改用 ttentionOf（原先漏掉落盘 attention → 一条投递失败工单被误判 working/queued，
+  此后每次准入都返回 	icket-working，手动叫醒也被永久挡住）。
+- ack 后未派工的工单落 idle（原先永远显示「排队中」并占住准入）；新增诊断原因 delivery-blocked。
+- 派工加进程内锁（API 重试 × 调度自动重试并发会投两条 prompt、attempts 跳级）。
+- 投递期间被 stop 的工单不再写回 sessionId/attempts；stop 现在也会取消 worker 会话的当前 turn。
+- headless profile（没有 sessionController）不再先建工单再失败、留下幽灵「排队中」工单。
+- 叫醒词拼装失败也写 attention + 退避（原先静默卡在「排队中」）。
+
+**② 红线段（P0/P1）**
+- 风控识别不再只认 code=601：publish 层失败统一带 [RISK] 标记，-412/-352/-799/-509/-10403/10031/HTTP 412/429
+  全部落 ate-limited（永不自动重试）；ate-limited 工单连「重试」动作也拒绝（只能 ack / stop / 人工处理后新建）。
+- publish.copyright 只能为 1（自制）：设置页原先允许填 2，发布模块却写死 1（用户以为标了转载，实际投的是自制）。
+- AI 标注改为**画面顶栏与投稿简介都必须有**，且**配置不能关**（v0.2.0 两处 equireAiLabel=false 可关掉红线）。
+- 红线词扫描覆盖标题/标签（原先只扫简介，	itlePrefix 可以夹带）。
+- CLI publish --go 也过模块层三重闸：llowGo + dryRun=false + 显式 --confirm（原先只有宿主 API 层检查，CLI 能直接真发）。
+
+**③ 视频管线（P1/P2）**
+- render 成功后删除 eview.json；review 记录被审视频/故事板的 mtime；publish 拒绝过期 review
+  （原先「render→review(pass)→改 storyboard→再 render」的新视频能拿旧 pass 出投稿包）。
+- review 的时长闸门改用 ffmpeg 实测 ideo.mp4 时长（原先只信 meta.json：改大数字就能让 2 秒片过审）。
+- deps 体检加 numpy（渲染器 import numpy，原先只查 Pillow → 「体检全绿」后渲染 ModuleNotFoundError）。
+- plan 先校验参数再落盘（非法尺寸不再留下空目录）。
+
+**④ 任务与生命周期**
+- 插件重载（禁用→启用/HMR）后 startJob 不再永久返回「插件正在卸载」；看门狗不再把重载后仍存活的子进程标 failed。
+- terminate 任务在 Windows 用 	askkill /T 杀进程树（不再留 ffmpeg 孤儿）；spawn 失败不再泄漏日志 fd。
+- 看门狗结束的任务挂 stalled（与文档一致）；启动对账 grace 归零（重启后立即提示，而不是等 30/45 分钟）。
+- stalled / host-restarted 不再自动重试（舞台无法确认 agent 是否还在干活，自动重派会出现两个 worker）。
+- 存活检查把工单目录/产物 mtime 也算作活动证据，grace 45 分钟。
+- 工单账本：多进程写入会按 mtime 重读；损坏时先备份 .corrupt-*.bak；50 条上限优先保留开放工单；waiting 超 48 小时自动结案。
+- eport=failed/blocked 的 ack 后不再显示「等你」却没有任何按钮；locked→failed 不再累积两种 attention。
+
+**⑤ 宿主 API / 配置 / 设置页**
+- 回环判定改用 URL 解析（IPv6 [::1]:65026 不再被误判 403），非回环 Host 交给宿主 equestRejection（	rustedHosts/远程访问可用）。
+- /media 支持 Range（视频可拖动/续播）；用 realpath 防 junction/symlink 逃出 videoRoot。
+- 配置损坏时 GET /settings 返回 warnings，保存前备份 .corrupt-*.bak；拒绝相对 outDir、非字符串红线词、非法语速/音高。
+- 请求体解析：断开/超限/坏 JSON 返回 400/413，错误信息不再回显 body（避免 cookie 片段进日志）。
+- 设置页「允许真发」徽标/红条改为读**服务端已保存**的配置（原先读未保存草稿，可误认为已关）。
+- 修 9 处主题变量名（--dsw-alias-state-warn-primary）、请求超时、保存成功后被刷新失败误报为失败。
+
+**⑥ 发布就绪**
+- ngines.node 改为 >=20.12（import.meta.dirname 需要），ngines.dsh >=0.2.0；README 同步。
+- npm 包补齐 epository/homepage/bugs/author、iles 加入示例配置、可选 peer @deepseek-ai/dsh-tools。
+- 新增 .github/workflows/ci.yml（Windows/Ubuntu × Node 20/22：测试 + selfcheck + npm pack 解包再测）、SECURITY.md、CONTRIBUTING.md。
+- README 安装步骤参数化（不再硬编码作者本机路径）、补 numpy/Node 版本/示例配置；文档与实现同步（prompt 签名、测试数、死设置）。
+- 新增回归测试：	ests/host-dispatch-contract.test.mjs（用宿主真实形状的 prompt(request, signal) 断言必须传 signal）等。
+
+---
 ## 0.2.0 — 2026-11-07 · 工单模型（借鉴 DeepSeek Super-agent）
 
 **这一版给「叫醒 → 干活」加上了身份、记录和恢复能力。** 结构上借鉴了 DeepSeek 官方研究原型

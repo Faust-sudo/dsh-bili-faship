@@ -44,10 +44,10 @@ v0.2 起，每次「做一条」都是一个**工单**：有 id、有目录、�
 
 | 要什么 | 必须？ | 说明 |
 |---|---|---|
-| **DSH ≥ `0.1.7-rc.1`**（桌面版 0.2.x 亦可） | ✅ | 插件按 bundle patch 挂载；桌面版默认开 HMR，装完即可用（没开 HMR 要重启一次） |
-| **Node 18+** | ✅ | 宿主会探测「真能跑脚本的 node」；Electron 的 `process.execPath` 不能直接跑脚本 |
+| **DSH ≥ `0.2.0`**（桌面版 0.2.x 亦可） | ✅ | 插件按 bundle patch 挂载；桌面版默认开 HMR，装完即可用（没开 HMR 要重启一次） |
+| **Node ≥ 20.12** | ✅ | 宿主会探测「真能跑脚本的 node」；Electron 的 `process.execPath` 不能直接跑脚本 |
 | **ffmpeg** | ✅ | 走 `FFMPEG` env → PATH → 插件 `bin/` → `~/.dsh/bili-whale/bin` → 剪映自带 |
-| **Python 3 + Pillow** | ✅ | 逐帧渲染用；`python -c "import PIL"` 能过即可，可用 `WHALE_PYTHON` / 设置页指定 |
+| **Python 3 + Pillow + numpy** | ✅ | 逐帧渲染用；`python -c "import PIL, numpy"` 能过即可，可用 `WHALE_PYTHON` / 设置页指定 |
 | **BGM / SFX** | ✅ | 已随包（CC0 程序合成），不用另下 |
 | **数据目录可写** | ✅ | 视频根目录 + 任务目录（`<DSH_HOME>/bili-faship`）要能写 |
 | **她的表情包** | ⬜ 缺失只 warn | 默认找 `~/.dsh/bili-whale/stickers/packs/大肥鱼`，设置页可改 |
@@ -59,28 +59,34 @@ v0.2 起，每次「做一条」都是一个**工单**：有 id、有目录、�
 
 ## 装
 
-**推荐：用 DSH 自带的插件管理器装本地目录**（会自动启用 + 写进 profile 的 bundle 列表；
+**推荐：用 DSH 自带的插件管理器装**（会自动启用 + 写进 profile 的 bundle 列表；
 桌面版带 HMR 时立即生效，没有 HMR 就重启一次）：
 
-- 图形界面：**设置 → 插件 → 添加插件 → 从本地目录安装**，选 `D:\Agent\skills\chajian\dsh-bili-faship`；
-- 或者对 DSH 里的 agent 说「把 `D:\Agent\skills\chajian\dsh-bili-faship` 装成插件」，
-  它会调 `plugin_manager` 的 `install_bundle`（target 传绝对路径）。
+- **从本地目录**：**设置 → 插件 → 添加插件 → 从本地目录安装**，选你 clone 下来的插件目录；
+- **从 Git 地址**：**设置 → 插件 → 添加插件 → 从 Git 安装**，填
+  `git+https://github.com/<你的账号>/dsh-bili-faship.git`；
+- 或者对 DSH 里的 agent 说「把 `<插件目录绝对路径>` 装成插件」——它会调 `plugin_manager` 的 `install_bundle`。
 
 **手动/CLI 装法**（等价，适合没开插件管理器或想完全手动的情况）：
 
 ```bash
-# 1) 把包装进 profile（link 到源码目录；Windows 路径带引号更稳）
-dsh plugin --profile desktop add "link:D:\Agent\skills\chajian\dsh-bili-faship"
+# 1) 把包装进 profile（link 到源码目录；路径里有空格时用引号）
+dsh plugin --profile desktop add "link:<你 clone 下来的插件目录>"
 
-# 2) 打开 C:\Users\zcr\.dsh\profiles\desktop\package.json，
+# 2) 打开 profile 的 package.json（默认 <DSH_HOME>/profiles/desktop/package.json，
+#    Windows 下通常是 %USERPROFILE%\.dsh\profiles\desktop\package.json），
 #    把 "dsh-bili-faship" 加进 dsh.profile.bundles（建议放最后）
 # 3) 重启一次 DSH
 ```
+
+`dsh` 命令来自 DSH 安装目录自带的 CLI（例如 Windows 桌面版：
+`<DSH 安装目录>\resources\runtime\cli\bin\dsh.cmd`）。
 
 装好后进 **设置 → 视频工坊**（如果没出现，刷新一下页面；再没有就重启 DSH）。
 
 > ⚠️ 包里 `cordis.patch.yml` 的 `name:` 必须与安装后的**包名**一致（`dsh-bili-faship`），
 > 否则表现为「装上了但设置页 404 / entry did not activate」。
+> 配置形状可参考仓库根目录的 `bili-faship.config.example.json`（设置页保存的就是这一份）。
 
 ## 第一次用（四步）
 
@@ -139,7 +145,7 @@ v0.2 新增的 7 项设置（分在「节奏」和「工单与看门狗」两组
 | `plan --dir <dir> [--topic <主题>] [--width 320 --height 180 --fps 15] [--json]` | 生成 / 校验 `<dir>/storyboard.json`（已存在只校验，不覆盖） |
 | `render --dir <dir> [--json]` | TTS → 时间轴 / 字幕 → 逐帧渲染 → 混音 → `video.mp4` / `cover.jpg` / `subtitles.srt` / `timing.json` / `meta.json`；失败非 0，不留半成品 |
 | `review --dir <dir> [--json]` | 7 项硬闸门自审，写 `review.json`；exit 0 = pass |
-| `publish --dir <dir> [--dry\|--go] [--json]` | 默认 `--dry` 只出投稿包、不联网；`--go` 才真发（自审 pass + 频率闸 + 双重开关） |
+| `publish --dir <dir> [--dry\|--go --confirm] [--json]` | 默认 `--dry` 只出投稿包、不联网；`--go --confirm` 才真发（自审 pass + 频率闸 + allowGo/dryRun/confirm 三重闸） |
 | `status [--json]` | 最近发布 / 下次到期 / 待发（自审 pass 未发） |
 | `deps [--json]` | 依赖体检：node / ffmpeg / Python+Pillow / 表情包 / 字体 / BGM / cookie / 日记 |
 
@@ -279,7 +285,7 @@ HTTP 侧是 `GET /tickets` 与 `POST /tickets`，`GET /status`/`faship_status` �
 4. **不刷量、不群发、不诱导互关**：撞 412 / 429 / 601 立即停，不自动重试、不绕验证码。
 5. `review.pass !== true` 不得发布；`publish --go` 在插件层还必须同时满足
    设置里 `autoPublish.allowGo === true`、`autoPublish.dryRun === false`、`publish.enabled` 为真，
-   **且**调用方显式 `confirm: true`（工具 / HTTP 双层）。
+   **且**调用方显式 `confirm: true`（工具 / HTTP / CLI `--confirm`）。
 
 ## ⚠️ 601 风险：不要自动重试
 

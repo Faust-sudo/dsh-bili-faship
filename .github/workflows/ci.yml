@@ -1,0 +1,68 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }} / node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        node: ['20', '22']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Show toolchain
+        run: node --version && npm --version
+      - name: Unit tests (offline: no render / no publish)
+        run: node --test
+      - name: Host + client selfcheck
+        run: node selfcheck.mjs
+      - name: CLI smoke
+        run: node tools/bili-faship.mjs --help
+
+  package:
+    name: package integrity (npm pack → unpack → run)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Pack and verify the published artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pack --pack-destination "$RUNNER_TEMP"
+          tgz=$(ls "$RUNNER_TEMP"/dsh-bili-faship-*.tgz)
+          mkdir -p "$RUNNER_TEMP/unpacked"
+          tar -xzf "$tgz" -C "$RUNNER_TEMP/unpacked"
+          pkg="$RUNNER_TEMP/unpacked/package"
+          # 运行时必需文件（缺一个就说明 package.json 的 files 写漏了）
+          test -f "$pkg/tools/video/assets/bgm/soft-groove.mp3"
+          test -f "$pkg/tools/video/assets/sfx/pop.wav"
+          test -f "$pkg/tools/video/renderer/render.py"
+          test -f "$pkg/prompts/wake.md"
+          test -f "$pkg/cordis.patch.yml"
+          test -f "$pkg/bili-faship.config.example.json"
+          test -f "$pkg/SECURITY.md"
+          # 从"发布出去的那份"跑预检（源码能跑 ≠ tarball 能跑）
+          ( cd "$pkg" && node selfcheck.mjs )
+          ( cd "$pkg" && node --test )
+          ( cd "$pkg" && node tools/bili-faship.mjs --help )

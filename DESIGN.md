@@ -7,7 +7,7 @@
 > 现在把它**单独做成一个 DSH 插件**，借鉴 `dsh-bili-whale`（设置页/生物钟/信任栅栏/依赖体检/node 运行时）
 > 和 `dsh-bili-scroll`（defineTool 注册/宿主依赖解析/selfcheck/打包规范）。
 >
-> 原项目 `D:/agent_train/bili-faship` 与 `C:/Users/zcr/.dsh/plugins/dsh-bili-whale` **只读参考，不许改**。
+> 原项目 原独立项目 `bili-faship` 与姊妹插件 `dsh-bili-whale` **只读参考，不许改**。
 > 真投稿（`publish --go`）**一律不许在开发/测试中触发**。
 
 ---
@@ -33,14 +33,14 @@
 ## 2. 目录与归属（write scope）
 
 ```
-D:\Agent\skills\chajian\dsh-bili-faship\
+<插件目录>\
   package.json / cordis.patch.yml      [Lead]
   index.js                             [Lead]  宿主入口
   lib/                                 [Lead]
     hostdeps.mjs      # 从宿主树解析 defineTool（拿不到给本地兜底，不炸插件）
     node-runtime.mjs  # 真 node（Electron 的 process.execPath 跑不了脚本）
     config.mjs        # 宿主侧配置：读/合并/校验/写（唯一真相，复用 tools/lib/video-config.mjs）
-    deps.mjs          # 依赖体检（node/ffmpeg/Python+Pillow/表情包/字体/cookie/日记/目录）
+    deps.mjs          # 依赖体检（node/ffmpeg/Python+Pillow+numpy/表情包/字体/cookie/日记/目录）
     jobs.mjs          # 长任务队列（render/publish-go…）：启动子进程、日志、状态、重入保护
     scheduler.mjs     # 生物钟：每 60s tick，到期+窗口内 → sessionController.prompt 叫醒
     prompt.mjs        # 叫醒词（做片流程/红线/路径/汇报要求）
@@ -183,9 +183,9 @@ persona.name≤40、paths ≤ 500）。
 ```json
 { "ok": true, "items": [ { "name":"node", "ok":true, "detail":"v24.20.0", "fix":null } ],
   "node": { "path":"", "version":"" }, "ffmpeg": { "path":"", "version":"" },
-  "python": { "path":"", "pillow":"" }, "home": "..." }
+  "python": { "path":"", "pillow":"", "numpy":"" }, "home": "..." }
 ```
-`ok` = 所有硬依赖（node/ffmpeg/python+Pillow/BGM 资源）都真跑通；表情包/cookie/日记缺失只 warn（`ok:false` 但 `items[].optional:true`，`ok` 只由必需项决定）。
+`ok` = 所有硬依赖（node/ffmpeg/python+Pillow+numpy/BGM 资源）都真跑通；表情包/cookie/日记缺失只 warn（`ok:false` 但 `items[].optional:true`，`ok` 只由必需项决定）。
 
 ### POST `/cookie`
 body `{ sessdata, bili_jct, buvid3 }`；复用 dsh-bili-whale 的清洗+校验逻辑（SESSDATA ≥20 字符、
@@ -251,7 +251,7 @@ body：`{ action: "plan"|"render"|"review"|"publish-dry"|"publish-go", dir?, top
 - 条件全满足才叫醒：`video.enabled` && `schedule.enabled` && 在窗口内 && `due`
   && `lastWakeDay !== 今天` && 距上次叫醒 ≥ `cooldownHours` && 没有运行中任务。
 - 叫醒 = `controller.create({ sessionId:'bili-faship', cwd })`（失败忽略，复用已有会话）
-  → `controller.prompt({ requestId, sessionId:'bili-faship', mode:'queue', content:[{type:'text',text}] })`。
+  → `controller.prompt({ requestId, sessionId:'bili-faship', mode:'queue', content:[{type:'text',text}] }, signal)`（**宿主契约：第二个参数必须是 AbortSignal**，漏传会 TypeError）。
 - 成功写 `schedule.json`（`{ version:1, lastWakeAt, lastWakeDay, lastAction:'wake', lastSessionId }`）；
   失败记日志、保留状态，下个 tick 按 `minGapMinutes` 重试。
 - 叫醒词（`lib/prompt.mjs`）必须包含：身份（persona）、到期信息、素材路径、CLI 绝对路径、
@@ -281,7 +281,7 @@ body：`{ action: "plan"|"render"|"review"|"publish-dry"|"publish-go", dir?, top
 
 ## 9. 测试与自检（必须全绿）
 
-- `node --test "tests/*.test.mjs"`：当前 **131 项全绿**（管线 51：原项目 46 项等价移植 + 2 项新契约 + 3 项 publish.tags/titlePrefix；宿主 38；设置页 26；包清单 13）。
+- `node --test`：当前 **176 项全绿**（含 v0.2.1 新增的宿主契约回归：派工 signal / 风控码识别 / 准入死锁 / review 过期等）。
 - `node selfcheck.mjs`：假 ctx 跑 `apply()`（工具注册数、路由注册数、scheduler 不启动但对象存在），
   假 `window.__ModuleLoader__` + 假 React 跑 client factory（能 apply、能注册 section）。
 - `node tools/bili-faship.mjs --help` / `status --json` 可跑。
@@ -449,10 +449,10 @@ admission: { observeOnly: false }
 
 - 原项目：`D:/agent_train/bili-faship/`（HANDOFF.md、README.md、docs/、tools/、tests/）
 - 设置页/生物钟/信任栅栏/依赖体检/node 运行时：
-  `C:/Users/zcr/.dsh/plugins/dsh-bili-whale/lib/{index.js,client.js,scheduler.js,session-delivery.js,node-runtime.js}`、
+  `dsh-bili-whale/lib/{index.js,client.js,scheduler.js,session-delivery.js,node-runtime.js}`、
   `tools/lib/{runtime.mjs,config.mjs,paths.mjs,traffic.mjs}`
 - 工具注册/宿主依赖/自检/打包：
-  `C:/Users/zcr/.dsh/profiles/desktop/node_modules/dsh-bili-scroll/{index.js,client.js,selfcheck.mjs,package.json}`、
+  `dsh-bili-scroll`（profile node_modules）里的 `{index.js,client.js,selfcheck.mjs,package.json}`、
   `lib/hostdeps.mjs`
 - DSH 版本：0.2.2-rc.1（桌面版 profile `desktop`）
 
@@ -460,8 +460,8 @@ admission: { observeOnly: false }
 
 ## 12. 禁止事项
 
-- 不改 `D:/agent_train/bili-faship`、不改 `C:/Users/zcr/.dsh/plugins/dsh-bili-whale`。
-- 不动 `C:/Users/zcr/.dsh/profiles/desktop` 里的任何文件（安装由 Lead 统一做）。
+- 不改原独立项目、不改姊妹插件 `dsh-bili-whale`。
+- 不动 DSH 桌面 profile 里的任何文件（安装由插件管理器统一做）。
 - 不真投稿、不真发评论/私信、不刷量。
 - 不把 cookie / 密钥写进仓库或日志。
 - 不在 1080p 全片渲染上耗时间；冒烟用 320×180。

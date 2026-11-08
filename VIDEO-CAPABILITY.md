@@ -33,7 +33,7 @@
         └─ render.mjs
              · 每场 TTS（Edge TTS，免费无 key，去尾静音）
              · 时间轴 / 字幕 cue（标点切句、关键词高亮）
-             · 调 Python 逐帧渲染（Pillow：背景 / 气泡 / 表情包 / 12 种卡片 / 大字 / 印章 / 胶囊字幕 / 封面）
+             · 调 Python 逐帧渲染（Pillow + numpy：背景 / 气泡 / 表情包 / 12 种卡片 / 大字 / 印章 / 胶囊字幕 / 封面）
              · BGM + SFX 混音 + loudnorm（-16 LUFS）
              · 输出 video.mp4 / cover.jpg / subtitles.srt / meta.json / timing.json（先写临时目录再换名）
         └─ review.mjs → review.json（pass / score / checks；发布前置硬闸门）
@@ -248,4 +248,4 @@
 2. **不冒充真人**：「我是真人」类表述直接 FAIL。
 3. **不搬运**：引用三要素齐全且单段 ≤ 3 秒。
 4. **不刷量、不群发、不诱导互关**；撞 412 / 429 / 601 立即停，不自动重试。
-5. `copyright` 固定写 **1（自制）**，不开放配置（AI 生成内容不能标转载）。
+5. `copyright` 固定写 **1（自制）**，不开放配置（设置页只读；AI 生成内容不能标转载，配置写 2 会被 publish 直接拒绝）。

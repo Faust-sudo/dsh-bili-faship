@@ -4,7 +4,7 @@
 # 插件挂进 profile 的方式（二选一）：
 #   ① 官方插件管理：设置 → 插件 → 安装本地包（或 plugin_manager install_bundle）
 #   ② CLI（本地开发）：
-#        dsh plugin --profile desktop add link:D:\Agent\skills\chajian\dsh-bili-faship
+#        dsh plugin --profile desktop add link:<你 clone 下来的插件目录>
 #      然后把 "dsh-bili-faship" 加进 profile package.json 的 dsh.profile.bundles。
 #
 # 装完后设置页在：设置 → 视频工坊（/dsh-bili-faship/api/* 由插件宿主半端提供）

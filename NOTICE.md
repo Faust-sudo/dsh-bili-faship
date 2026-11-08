@@ -30,6 +30,7 @@
 
 | 项目 | 借了什么 | 说明 |
 |---|---|---|
+| `dsh-superagent-prototype`（DeepSeek 官方研究原型，MIT） | 领域模型结构：Source → Trigger → Eval → Ticket → Executor → Report → Panel（v0.2 工单/准入/派工/报告/看板的设计依据） | 只借结构，未复制代码；学习笔记见 `docs/SUPERAGENT-NOTES.md` |
 | `dsh-bili-whale`（本机 `~/.dsh/plugins/dsh-bili-whale`） | 设置页的数据驱动表单、生物钟「窗口 + 冷却」的调度思路、DSH 信任栅栏、依赖体检的字段形状、node 运行时探测（Electron 不能直接跑脚本） | 思路与教训参考；本插件**代码零依赖**它，只在默认素材路径上做了兼容（`~/.dsh/bili-whale/...`） |
 | `dsh-bili-scroll`（本机桌面版 profile 的 node_modules 里） | `defineTool` 注册工具、从宿主树解析依赖的 `hostdeps.mjs` 兜底、`selfcheck.mjs` 预检、`package.json` / bundle patch 的打包规范 | 思路与规范参考；`faship_*` 工具与自检脚本为本项目自行实现 |
 | 原独立项目 `D:/agent_train/bili-faship` | 整条视频管线（storyboard v4 / 逐帧渲染 / 自审 7 闸门 / 投稿协议）；`tools/**` 与部分 `docs/**` 由它移植而来 | 同一作者，已获准在此并回为插件；原项目保持只读 |

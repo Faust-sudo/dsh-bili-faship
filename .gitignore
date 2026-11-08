@@ -6,3 +6,14 @@ videos/
 *.tmp
 .DS_Store
 Thumbs.db
+
+# Python（渲染器）
+__pycache__/
+*.pyc
+*.pyo
+
+# 渲染/投稿的临时产物（都在视频目录里，但别让误拷进仓库）
+.work-*/
+*.tmp
+*.tgz
+.venv/

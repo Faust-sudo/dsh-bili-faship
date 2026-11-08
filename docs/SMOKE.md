@@ -9,17 +9,17 @@
 - 日期：2026-11-06
 - 执行：视频管线负责人（pipeline）
 - 机器：Windows（本机），Node v24.20.0
-- 代码：`D:\Agent\skills\chajian\dsh-bili-faship`（本插件）
+- 代码：`<插件目录>`（本插件）
 
 ## 1. 环境
 
 | 依赖 | 实际情况 |
 |---|---|
-| node | v24.20.0（`D:\APP\nodejs\node.exe`） |
-| ffmpeg | 7.1-essentials_build（`C:\Users\zcr\.dsh\bili-whale\bin\ffmpeg.exe`，只读复用） |
+| node | v24.20.0（`<node>`） |
+| ffmpeg | 7.1-essentials_build（`<USER>\.dsh\bili-whale\bin\ffmpeg.exe`，只读复用） |
 | Python | 3.13.12（PATH 里的 `python`） |
 | Pillow | 12.2.0 |
-| 表情包 | `C:\Users\zcr\.dsh\bili-whale\stickers\packs\大肥鱼`（12 个 GIF，只读复用；渲染器按 11 组情绪键建帧缓存） |
+| 表情包 | `<USER>\.dsh\bili-whale\stickers\packs\大肥鱼`（12 个 GIF，只读复用；渲染器按 11 组情绪键建帧缓存） |
 | 字体 | `C:/Windows/Fonts/msyhbd.ttc` |
 | BGM/SFX | 插件自带 `tools/video/assets/{bgm,sfx}` |
 | TTS | Edge TTS（真实联网，`zh-CN-XiaoyiNeural`） |
@@ -29,15 +29,15 @@
 冒烟**不是**在用户真实配置上跑的，全部落在系统临时目录：
 
 ```powershell
-$tmp = "C:\Users\zcr\AppData\Local\Temp\faship-smoke-20261106-234530"
+$tmp = "<USER>\AppData\Local\Temp\faship-smoke-20261106-234530"
 $env:DSH_HOME          = "$tmp\.dsh"                        # 缓存/日志落到临时目录
 $env:BILI_FASHIP_CONFIG = "$tmp\bili-faship.config.json"    # 配置只读这一份
-$env:WHALE_STICKER_DIR  = "C:\Users\zcr\.dsh\bili-whale\stickers\packs\大肥鱼"  # 只读复用表情包
+$env:WHALE_STICKER_DIR  = "<USER>\.dsh\bili-whale\stickers\packs\大肥鱼"  # 只读复用表情包
 # 成片根目录在配置里指向 $tmp\videos
 ```
 
-- 没有修改 `C:\Users\zcr\.dsh` 下任何东西（冒烟后确认 `C:\Users\zcr\.dsh\bili-faship` 仍不存在）；
-- 没有修改原项目 `D:\agent_train\bili-faship`；
+- 没有修改 `<USER>\.dsh` 下任何东西（冒烟后确认 `<USER>\.dsh\bili-faship` 仍不存在）；
+- 没有修改原独立项目；
 - 没有执行 `publish --go`。
 
 临时配置（对比 DESIGN §4 的默认值只改了 3 处，都是为了"小尺寸快跑"）：
@@ -58,12 +58,12 @@ $env:WHALE_STICKER_DIR  = "C:\Users\zcr\.dsh\bili-whale\stickers\packs\大肥鱼
 
 - `minDurationSec: 8`：默认 15 秒会让 3 场模板最少 15 秒；冒烟只是验证管线，缩短一点少渲染 1/3 的帧。
 - `paths.ffmpeg`：因为把 `DSH_HOME` 指到了临时目录，ffmpeg 解析链里"`<DSH_HOME>/bili-whale/bin`"那一步
-  自然落空（这是正确行为）。真实使用时 `DSH_HOME` 就是 `C:\Users\zcr\.dsh`，不需要填；
+  自然落空（这是正确行为）。真实使用时 `DSH_HOME` 就是 `<USER>\.dsh`，不需要填；
   填它同时也验证了「配置 `video.paths.ffmpeg` 最优先」这条链路。
 
 ## 3. 命令与耗时
 
-工作目录 `D:\Agent\skills\chajian\dsh-bili-faship`：
+工作目录 `<插件目录>`：
 
 ```powershell
 node tools/bili-faship.mjs plan   --dir $dir --topic "冒烟测试：320x180 能不能跑通" --width 320 --height 180 --fps 15 --json
