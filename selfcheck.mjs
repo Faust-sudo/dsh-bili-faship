@@ -137,10 +137,11 @@ console.log(`\n✓ host 半端：name=${plugin?.name ?? '(未导出)'}  inject=$
 console.log(`  工具 ${toolNames.length} 个：${toolNames.join(', ') || '（无）'}`)
 console.log(`  路由 ${routePaths.length} 条：${routePaths.join(', ') || '（无）'}`)
 
-// 工具名契约（DESIGN §6）：全部 faship_ 前缀，且九个都在
+// 工具名契约（DESIGN §6）：全部 faship_ 前缀，且 13 个都在（v0.2 加了工单三件套）
 const EXPECTED_TOOLS = [
   'faship_status', 'faship_deps', 'faship_videos', 'faship_plan',
   'faship_render', 'faship_review', 'faship_publish', 'faship_job', 'faship_wake',
+  'faship_tickets', 'faship_report', 'faship_ticket_action', 'faship_config',
 ]
 if (toolNames.length === 0) fail('一个工具都没注册（ctx.tools.register 没被调用）')
 const notFaship = toolNames.filter((n) => !String(n).startsWith('faship_'))
@@ -159,8 +160,9 @@ for (const t of registeredTools) {
   if (params.additionalProperties !== false) looseSchema += 1
 }
 if (looseSchema > 0) {
-  // 宿主自己的 defineTool 会闭合 schema；这里拿不到宿主包时用的是本地兜底，它不补 additionalProperties。
-  console.log(`  提醒：${looseSchema} 个工具的 parameters 没写 additionalProperties:false（本地兜底不补；宿主 defineTool 会闭合）`)
+  // 宿主的 defineTool 也不会补 additionalProperties（实测 dsh-tools 只产出 type/properties/required），
+  // 这里只是提醒：工具 execute 自己要能容忍未知参数。
+  console.log(`  提醒：${looseSchema} 个工具的 parameters 没写 additionalProperties:false（宿主/本地兜底都不补；execute 需容忍未知参数）`)
 }
 
 // 路由（DESIGN §5）：宿主可以注册一条 prefix 路由自己分发，也可以逐条注册 —— 两种都认
@@ -172,7 +174,7 @@ if (!routePaths.some((rp) => String(rp) === '/dsh-bili-faship/api' || String(rp)
 }
 // 业务路由由 lib/api.mjs 分发：静态确认九条都在（详细版的断言在 tests/package.test.mjs）
 const apiSource = fs.readFileSync(path.join(ROOT, 'lib', 'api.mjs'), 'utf8')
-const missingRoutes = ['/settings', '/status', '/videos', '/deps', '/cookie', '/jobs', '/wake', '/report', '/media']
+const missingRoutes = ['/settings', '/status', '/videos', '/deps', '/cookie', '/jobs', '/wake', '/report', '/media', '/tickets']
   .filter((p) => !apiSource.includes(`'${p}'`) && !apiSource.includes(`"${p}"`))
 if (missingRoutes.length) fail(`lib/api.mjs 里没找到这些 DESIGN §5 路由：${missingRoutes.join(', ')}`)
 
@@ -212,6 +214,40 @@ if (prefixRoute) {
   }
 } else {
   fail('注册的路由里没有 handler（或形状不对）——设置页请求会没人接')
+}
+
+/* ────────────── ①.5 派工契约：宿主 prompt(request, signal) 必须带 AbortSignal ──────────────
+ * v0.2.0 的 P0：漏传 signal → 真实宿主第一行 signal.throwIfAborted() 直接 TypeError，
+ * 生物钟/「现在做一条」/工单重试全部 100% 失败，而 161 个单测全绿（mock 只写了一参）。
+ * 这里用宿主真实形状的 controller 真走一遍 wakeNow → dispatchTicket → prompt。 */
+try {
+  const apiMod = await import('./lib/api.mjs')
+  const prompts = []
+  const strictController = {
+    async create({ sessionId } = {}) { return { sessionId } },
+    async prompt(request, signal) {
+      // 宿主的真实第一行：signal 缺失时抛的就是这个 TypeError（不要改成可选调用）
+      if (!(signal instanceof AbortSignal)) throw new TypeError("Cannot read properties of undefined (reading 'throwIfAborted')")
+      signal.throwIfAborted()
+      prompts.push(request)
+      return { accepted: true }
+    },
+  }
+  const wakeCtx = {
+    get(key) {
+      if (key === 'sessionController') return strictController
+      if (key === 'connection') return fakeConnection
+      return undefined
+    },
+    tools: {},
+    webServer: {},
+  }
+  const wake = await apiMod.wakeNow(wakeCtx, { manual: true, reason: 'selfcheck 派工契约' })
+  if (!wake || wake.ok !== true) fail(`派工契约失败：wakeNow 返回 ${JSON.stringify(wake).slice(0, 400)}`)
+  else if (prompts.length !== 1) fail(`派工契约失败：宿主应收到 1 条 prompt，实际 ${prompts.length}`)
+  else console.log('  派工契约冒烟：wakeNow → prompt(request, AbortSignal) ✓')
+} catch (e) {
+  fail('派工契约冒烟抛错（叫醒链路可能又断了）', e)
 }
 
 /* ────────────── ② client 半端：假 window.__ModuleLoader__ + 假 react ────────────── */

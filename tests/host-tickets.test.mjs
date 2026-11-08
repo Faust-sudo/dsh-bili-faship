@@ -252,11 +252,18 @@ test('jobs→tickets: 渲染失败 / 601 风控 会变成 attention，且风控�
   assert.equal(retry.includes(t2.id), false)
 })
 
-test('detectRateLimit：601/412/429 命中，普通错误不误判', () => {
+test('detectRateLimit：风控码/HTTP 状态/[RISK] 标记都命中，普通错误不误判', () => {
   assert.equal(tk.detectRateLimit('{"code":601,"message":"too fast"}'), '601')
   assert.equal(tk.detectRateLimit('提交失败 code=412'), '412')
-  assert.equal(tk.detectRateLimit('429 too many requests'), '429')
+  assert.equal(tk.detectRateLimit('提交失败 code=-412'), '-412')
+  assert.equal(tk.detectRateLimit('HTTP 412 Precondition Failed'), '412')
+  assert.equal(tk.detectRateLimit('HTTP 429 Too Many Requests'), '429')
+  assert.equal(tk.detectRateLimit('提交失败 code=10031 操作太快'), '10031')
+  assert.equal(tk.detectRateLimit('[RISK] ⚠ 预上传 触发平台风控；code=601'), 'risk')
+  assert.equal(tk.detectRateLimit('429 too many requests'), null, '光有 429 数字不算（避免误伤端口/时间戳）')
+  assert.equal(tk.detectRateLimit('publish 失败：上传过快，请稍后', { action: 'publish-go' }), 'text')
   assert.equal(tk.detectRateLimit('ffmpeg exited 1: no such file'), null)
+  assert.equal(tk.detectRateLimit('风控 两个字出现在渲染日志里', { action: 'render' }), null, '渲染日志不按发布风控处理')
 })
 
 // ---------------------------------------------------------------------------

@@ -235,13 +235,17 @@ function validateFields(fields) {
 }
 function validateRedlines(fields, cfg) {
   const redlines = cfg.redlines ?? {}
-  const banned = Array.isArray(redlines.bannedWords) ? redlines.bannedWords.map((w) => str(w)).filter(Boolean) : []
-  const hit = banned.find((w) => fields.desc.includes(w))
-  if (hit) {
-    fail('REDLINE_BANNED', `简介命中红线词「${hit}」：拒绝投稿（红线是代码闸门，不是提示词）\n  简介：${trunc(fields.desc, 200)}`)
+  // 红线 1：简介必须有 AI 标注（**配置不能关**；v0.2.0 的 requireAiLabel=false 能绕过红线）
+  if (!normalizeDesc(fields.desc).includes('AI生成')) {
+    fail('REDLINE_AI_LABEL', '简介里没有「AI 生成」标注：拒绝投稿（如实标注是红线第一条，配置不能关闭）\n  简介：' + trunc(fields.desc, 200))
   }
-  if (redlines.requireAiLabel !== false && !normalizeDesc(fields.desc).includes('AI生成')) {
-    fail('REDLINE_AI_LABEL', '简介里没有「AI 生成」标注：拒绝投稿（如实标注是红线第一条）\n  简介：' + trunc(fields.desc, 200))
+  // 红线 2：标题/前缀/标签也不能带违禁词（v0.2.0 只扫简介，titlePrefix 可以夹带）
+  const banned = Array.isArray(redlines.bannedWords) ? redlines.bannedWords.map((w) => str(w)).filter(Boolean) : []
+  for (const [where, text] of [['标题', fields.title], ['简介', fields.desc], ['标签', fields.tags.join(',')]]) {
+    const hit = banned.find((w) => String(text ?? '').includes(w))
+    if (hit) {
+      fail('REDLINE_BANNED', `${where}命中红线词「${hit}」：拒绝投稿（红线是代码闸门，不是提示词）\n  ${trunc(String(text), 200)}`)
+    }
   }
 }
 function validateCadence(index, cfg, slug, now) {
@@ -295,7 +299,10 @@ function buildPackage({ workDir, fields, cfg, media, review, meta, storyboard, p
   const publish = cfg.publish ?? {}
   const tid = Number(publish.tid ?? DEFAULT_TID)
   if (!Number.isInteger(tid) || tid <= 0) fail('CONFIG_INVALID', `video.publish.tid 不是合法分区 id（${JSON.stringify(publish.tid)}）；拒绝投稿`)
-  // 自制：1。AI 生成内容必须如实标为自制（配置里只允许 1；写死避免误设成转载）
+  // 自制：1。AI 生成内容必须如实标为自制（配置只允许 1；写死避免误设成转载）
+  if (Number(publish.copyright ?? 1) !== 1) {
+    fail('CONFIG_INVALID', `video.publish.copyright 只能是 1（自制）：AI 生成内容不能标转载，当前配置是 ${JSON.stringify(publish.copyright)}。去设置页改回 1。`)
+  }
   const copyright = 1
   const no_reprint = publish.noReprint === false ? 0 : 1
   const slug = str(storyboard.slug) || str(meta.slug) || path.basename(workDir)
@@ -348,7 +355,9 @@ function buildPackage({ workDir, fields, cfg, media, review, meta, storyboard, p
 // 所有真实请求都从 net 走；默认 net = guardedFetch（traffic.mjs：跨进程间隔 / 写冷却 / 写预算 / 412 熔断）。
 // 任何 412 / 429 / 风控码 → 立即抛 RISK_BLOCKED，绝不重试；错误里带平台返回原文。
 function riskText(label, status, raw, code) {
-  const bits = [`⚠ ${label} 触发平台风控`]
+  // [RISK] 是机器可读标记：宿主 tickets.mjs 靠它判「平台风控 → 永不自动重试」，
+  // 不依赖 code 数字格式（-412 / 10031 / HTTP 429 等各种文案都能识别）。
+  const bits = [`[RISK] ⚠ ${label} 触发平台风控`]
   if (status) bits.push(`HTTP ${status}`)
   if (Number.isFinite(Number(code))) bits.push(`code=${code}`)
   bits.push('已立即停止、不重试（平台限制期间硬顶只会更糟）')
@@ -364,9 +373,9 @@ async function httpCall(net, url, init, label) {
     if (e && e.code === 'BILI_TRAFFIC_PAUSED') {
       const msg = String(e.message)
       if (/结果不确定|禁止重复发送|相同操作/.test(msg)) {
-        fail('WRITE_UNCERTAIN', `${label}：${msg}\n  已停止。这是「不确定有没有发出去」的保守处理：不要重试，先去创作中心/请求保护状态人工核查。`, { cause: e })
+        fail('WRITE_UNCERTAIN', `[RISK] ${label}：${msg}\n  已停止。这是「不确定有没有发出去」的保守处理：不要重试，先去创作中心/请求保护状态人工核查。`, { cause: e })
       }
-      fail('TRAFFIC_BLOCKED', `${label}：本地请求保护挡住本次请求 —— ${msg}`, { cause: e })
+      fail('TRAFFIC_BLOCKED', `[RISK] ${label}：本地请求保护挡住本次请求 —— ${msg}`, { cause: e })
     }
     fail('NETWORK_ERROR', `${label}：网络请求失败 —— ${e.message}（不重试，已停止）`, { cause: e })
   }
@@ -631,6 +640,19 @@ export async function publishVideo(opts = {}) {
   const workDir = path.resolve(rawDir)
   const cfg = resolveConfig(config)
   const root = resolveRoot(cfg)
+  // 真发的三道总闸在模块层也要有：v0.2.0 只在宿主 API 层做，CLI `publish --go` 直接绕过（实测能发出请求）。
+  if (mode === 'go') {
+    const ap = cfg.autoPublish ?? {}
+    if (options.confirm !== true) {
+      fail('CONFIRM_REQUIRED', '真发必须显式确认：publishVideo({ go:true, confirm:true }) / CLI `publish --go --confirm`。这是防误触，不是建议。')
+    }
+    if (ap.allowGo !== true) {
+      fail('GO_DISABLED', '设置里没打开「允许真发」（autoPublish.allowGo=false）：拒绝真发。设置页「发布与红线」里打开并二次确认。')
+    }
+    if (ap.dryRun !== false) {
+      fail('DRY_ONLY', 'autoPublish.dryRun=true：当前策略只允许 dry 投稿包。要真发先在设置里关掉 dryRun。')
+    }
+  }
 
   // ① 必读文件：storyboard / meta / review（顺序与合同一致：先校验自审再碰媒体）
   const storyboard = readJsonRequired(path.join(workDir, 'storyboard.json'), 'storyboard.json', 'INVALID_STORYBOARD')
@@ -638,6 +660,23 @@ export async function publishVideo(opts = {}) {
   const review = readJsonRequired(path.join(workDir, 'review.json'), '自审报告 review.json（先跑 video review）', 'REVIEW_NOT_PASSED')
   if (review.pass !== true) {
     fail('REVIEW_NOT_PASSED', `自审未通过（review.json.pass !== true）：拒绝投稿\n  自审是发布的前置条件；先让 video review 修到 pass，再看分数。`, { score: review.score ?? null })
+  }
+  // review 必须审的是**当前这一版**视频：render 会删 review.json，但手工拷贝/旧目录/绕过 render 仍可能留下旧 pass
+  {
+    const mtimeOf = (f) => { try { return fs.statSync(path.join(workDir, f)).mtimeMs } catch { return null } }
+    const curVideoM = mtimeOf('video.mp4')
+    const curStoryM = mtimeOf('storyboard.json')
+    const ev = review.evidence
+    const stale = []
+    if (ev && typeof ev.videoMtimeMs === 'number' && typeof curVideoM === 'number' && ev.videoMtimeMs !== curVideoM) stale.push('video.mp4 渲染后被改过')
+    if (ev && typeof ev.storyboardMtimeMs === 'number' && typeof curStoryM === 'number' && ev.storyboardMtimeMs !== curStoryM) stale.push('storyboard 在自审之后改过')
+    if (!ev && typeof curVideoM === 'number' && typeof curStoryM === 'number' && curVideoM > curStoryM && review.reviewedAt && Date.parse(review.reviewedAt) < curVideoM) {
+      // 老 review.json（v0.2.0 没有 evidence 字段）：用 mtime 兜底
+      stale.push('review.json 比 video.mp4 旧')
+    }
+    if (stale.length) {
+      fail('REVIEW_STALE', `自审报告过期（${stale.join('；')}）：拒绝投稿。重新跑一次 review（它必须审当前这一版视频）。`)
+    }
   }
 
   // ② 媒体文件闸门
@@ -649,6 +688,13 @@ export async function publishVideo(opts = {}) {
   const fields = resolveFields(storyboard, meta, cfg)
   validateFields(fields)
   validateRedlines(fields, cfg)
+  // 红线 1（画面侧）：AI 生成必须在画面顶栏标注 —— 简介有、画面没有也不行（v0.2.0 实测能过 review+publish）
+  {
+    const screenText = [storyboard?.topbar?.right, storyboard?.topbar?.label].filter((v) => typeof v === 'string').join(' ')
+    if (!/AI\s*生成|AI\s*合成|人工智能生成/i.test(screenText)) {
+      fail('REDLINE_AI_LABEL', '画面顶栏没有「AI 生成」标注（storyboard.topbar.right/label）：拒绝投稿。红线要求画面与简介都标注。')
+    }
+  }
 
   // ④ 频率 / 重复 / 配置闸门
   const slug = str(storyboard.slug) || str(meta.slug) || path.basename(workDir)

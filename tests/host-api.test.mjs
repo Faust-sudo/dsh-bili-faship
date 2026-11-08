@@ -1,16 +1,16 @@
 /**
  * host-api.test.mjs —— 宿主 HTTP API 的离线单测（假 req/res + 假 ctx，不联网）。
  *
- * 覆盖：信任栅栏（fail-closed / 非回环拒绝 / 栅栏拒绝码透传）、设置读写、
+ * 覆盖：信任栅栏（fail-closed / 宿主栅栏权威 / IPv6 回环识别 / 栅栏拒绝码透传）、设置读写、
  *       status/videos/deps/report、jobs 的参数闸门（不允许真发跑出去）、
- *       cookie 校验、/media 路径限制。
+ *       cookie 校验、/media 路径限制（含 junction 逃逸）。
  */
 import test, { after } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { Readable } from 'node:stream'
+import { Readable, Writable } from 'node:stream'
 
 const HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'faship-host-api-'))
 const DSH = path.join(HOME, '.dsh')
@@ -94,10 +94,22 @@ const writeCfg = (videoPatch) => {
 // 信任栅栏
 // ---------------------------------------------------------------------------
 
-test('api: 非回环 Host 一律 403（防服务绑 0.0.0.0）', async () => {
-  const r = await call({ host: '192.168.1.5:57276' })
+test('api: 回环判定不再自己 403 —— 非回环 Host 交给宿主栅栏（IPv6/trustedHosts 修复）', async () => {
+  // v0.2.0 用 host.split(':')[0] 判回环：`[::1]:65026` 被判成 `[` → 自己 403，
+  // 也把宿主 trustedHosts / 远程访问部署一律 403。现在权威边界是宿主 requestRejection。
+  // ① 宿主栅栏放行（默认 stub）→ 非回环也允许（远程访问靠这个）
+  let r = await call({ host: '192.168.1.5:57276' })
+  assert.equal(r.status, 200)
+  // ② 宿主栅栏拒绝 → 原样透传（真实 DSH 对不可信 Host 会 403）
+  r = await call({ host: '192.168.1.5:57276', ctx: makeCtx({ connection: { requestRejection: () => 403 } }) })
   assert.equal(r.status, 403)
-  assert.match(r.body.error, /本机回环/)
+  // ③ IPv6 回环必须被认出（旧实现这里是 false）
+  assert.equal(api.isLoopbackReq({ headers: { host: '[::1]:65026' } }), true)
+  assert.equal(api.isLoopbackReq({ headers: { host: '[::1]' } }), true)
+  assert.equal(api.isLoopbackReq({ headers: { host: '127.0.0.1:1' } }), true)
+  assert.equal(api.isLoopbackReq({ headers: { host: 'localhost:65026' } }), true)
+  assert.equal(api.isLoopbackReq({ headers: { host: 'evil.com' } }), false)
+  assert.equal(api.isLoopbackReq({ headers: {} }), false)
 })
 
 test('api: 信任栅栏拒绝码原样透传', async () => {
@@ -323,4 +335,121 @@ test('api: 根路径返回 API 摘要', async () => {
   const r = await call({ path: '/' })
   assert.equal(r.status, 200)
   assert.equal(r.body.api, API)
+})
+
+// ---------------------------------------------------------------------------
+// v0.2.1 修复回归：配置损坏备份 / 相对 outDir / Range / junction / 请求体
+// ---------------------------------------------------------------------------
+
+/** 直接构造 req（可带 raw body / 自定义 headers），用于测 readBody 与 Range */
+async function callRaw({ method = 'GET', path: p = '/settings', host = '127.0.0.1:57276', rawBody = null, headers = {}, ctx = makeCtx() } = {}) {
+  const req = new Readable({ read() { /* noop */ } })
+  req.method = method
+  req.url = API + p
+  req.headers = { host, ...headers }
+  if (rawBody !== null) req.push(Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(String(rawBody)))
+  req.push(null)
+  const res = makeRes()
+  await api.handleApi(ctx, req, res)
+  return { status: res.statusCode, body: jsonOf(res), res }
+}
+
+test('config: 损坏的配置文件 → GET /settings 带 warning；保存时备份原件再覆盖', async () => {
+  const corrupt = '{ this is not json '
+  fs.writeFileSync(CFG, corrupt)
+  cfgMod.resetVideoConfig()
+  let r = await call({ path: '/settings' })
+  assert.equal(r.status, 200)
+  assert.ok(Array.isArray(r.body.warnings) && r.body.warnings.some((w) => w.includes('不是合法 JSON')), JSON.stringify(r.body.warnings))
+
+  r = await call({ method: 'POST', path: '/settings', body: { config: { cadenceDays: 4 } } })
+  assert.equal(r.status, 200, JSON.stringify(r.body))
+  const baks = fs.readdirSync(DSH).filter((f) => /\.corrupt-\d+\.bak$/.test(f))
+  assert.equal(baks.length, 1, '损坏文件应被备份：' + baks.join(','))
+  assert.equal(fs.readFileSync(path.join(DSH, baks[0]), 'utf8'), corrupt, '备份内容应是原损坏内容')
+  assert.ok(r.body.warnings.some((w) => w.includes('已备份')))
+  writeCfg({})
+})
+
+test('config: 拒绝相对 outDir / 非字符串红线词 / 非法语速音高', async () => {
+  let r = await call({ method: 'POST', path: '/settings', body: { config: { outDir: 'relative/dir' } } })
+  assert.equal(r.status, 400)
+  assert.ok(r.body.errors.some((e) => e.includes('outDir')), JSON.stringify(r.body.errors))
+
+  r = await call({ method: 'POST', path: '/settings', body: { config: { redlines: { bannedWords: ['ok', 1] } } } })
+  assert.equal(r.status, 400)
+  assert.ok(r.body.errors.some((e) => e.includes('bannedWords')))
+
+  r = await call({ method: 'POST', path: '/settings', body: { config: { voice: { rate: 'abc' } } } })
+  assert.equal(r.status, 400)
+  assert.ok(r.body.errors.some((e) => e.includes('voice.rate')))
+
+  r = await call({ method: 'POST', path: '/settings', body: { config: { voice: { rate: '+8%', pitch: '+8Hz' } } } })
+  assert.equal(r.status, 200, JSON.stringify(r.body))
+})
+
+test('api: 坏 JSON 请求体 → 400 且错误信息不回显 body（cookie 片段不落日志/响应）', async () => {
+  const r = await callRaw({ method: 'POST', path: '/cookie', rawBody: 'SESSDATA=SECRET_VALUE_123' })
+  assert.equal(r.status, 400)
+  assert.equal(r.body.error, '请求体不是合法 JSON')
+  assert.equal(JSON.stringify(r.body).includes('SECRET_VALUE_123'), false)
+})
+
+/** 真 Writable 假 res：/media 的管道（pipe）需要真实流接口 */
+function makeStreamRes() {
+  const chunks = []
+  const res = new Writable({ write(chunk, _enc, cb) { chunks.push(Buffer.from(chunk)); cb() } })
+  res.statusCode = 200
+  res.headers = {}
+  res.chunks = chunks
+  res.writeHead = (code, headers) => { res.statusCode = code; Object.assign(res.headers, headers || {}); return res }
+  return res
+}
+async function callStream({ method = 'GET', path: p = '/', headers = {}, ctx = makeCtx() } = {}) {
+  const req = new Readable({ read() { /* noop */ } })
+  req.method = method
+  req.url = API + p
+  req.headers = { host: '127.0.0.1:57276', ...headers }
+  req.push(null)
+  const res = makeStreamRes()
+  await api.handleApi(ctx, req, res)
+  if (!res.writableFinished) await new Promise((resolve) => { res.once('finish', resolve); setTimeout(resolve, 2000).unref?.() })
+  return { status: res.statusCode, headers: res.headers, chunks: res.chunks }
+}
+
+test('api: /media 支持 Range（206 + Content-Range），视频可拖动/续播', async () => {
+  const demo = path.join(VIDEO_ROOT, 'range-demo')
+  fs.mkdirSync(demo, { recursive: true })
+  fs.writeFileSync(path.join(demo, 'video.mp4'), Buffer.from('0123456789'))
+  const p = '/media?dir=range-demo&file=video.mp4'
+  let r = await callStream({ path: p, headers: { range: 'bytes=2-5' } })
+  assert.equal(r.status, 206)
+  assert.equal(r.headers['Content-Range'], 'bytes 2-5/10')
+  assert.equal(Buffer.concat(r.chunks).toString('utf8'), '2345')
+  assert.equal(r.headers['Accept-Ranges'], 'bytes')
+  r = await callStream({ path: p, headers: { range: 'bytes=99-' } })
+  assert.equal(r.status, 416)
+  assert.equal(r.headers['Content-Range'], 'bytes */10')
+})
+
+test('api: /media 不能通过 junction 逃出 videoRoot（v0.2.0 实测逃逸）', async () => {
+  const outside = path.join(HOME, 'outside-root')
+  fs.mkdirSync(outside, { recursive: true })
+  fs.writeFileSync(path.join(outside, 'review.json'), JSON.stringify({ secret: 'outside-root' }))
+  const link = path.join(VIDEO_ROOT, 'junction-link')
+  try { fs.rmSync(link, { recursive: true, force: true }) } catch { /* 忽略 */ }
+  try {
+    fs.symlinkSync(outside, link, 'junction')
+  } catch {
+    return // 当前环境不允许建链接：跳过（不算失败）
+  }
+  const r = await call({ path: '/media?dir=junction-link&file=review.json' })
+  assert.equal(r.status, 403, JSON.stringify(r.body))
+})
+
+test('api: 只读路由不接受 POST（405）', async () => {
+  for (const p of ['/status', '/videos', '/deps', '/report']) {
+    const r = await call({ method: 'POST', path: p })
+    assert.equal(r.status, 405, p + ' -> ' + r.status)
+  }
 })

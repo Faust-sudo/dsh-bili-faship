@@ -74,6 +74,8 @@ function makeVideoDir(t, { slug = 'day0-test', publish = {}, review = {}, index 
     version: 4,
     slug,
     title: '备用标题（storyboard.title）',
+    // 红线：画面顶栏必须有 AI 标注（publish 会硬校验）
+    topbar: { badge: 'Day 0', label: 'AI 接管中', right: AI_LABEL },
     publish: pub,
     citations: [],
   })
@@ -85,7 +87,14 @@ function makeVideoDir(t, { slug = 'day0-test', publish = {}, review = {}, index 
   })
   fs.writeFileSync(path.join(dir, 'video.mp4'), Buffer.alloc(20, 7)) // 20 字节：mock chunk_size=8 → 3 片
   fs.writeFileSync(path.join(dir, 'cover.jpg'), Buffer.alloc(12, 3))
-  writeJson(path.join(dir, 'review.json'), { pass: true, score: 92, checks: [], reviewedAt: '2026-10-25T22:00:00+08:00', ...review })
+  // review 的 evidence 记录"审的是哪一版视频"（publish 用它判 review 是否过期）
+  const evidence = {
+    videoMtimeMs: fs.statSync(path.join(dir, 'video.mp4')).mtimeMs,
+    storyboardMtimeMs: fs.statSync(path.join(dir, 'storyboard.json')).mtimeMs,
+    metaMtimeMs: fs.statSync(path.join(dir, 'meta.json')).mtimeMs,
+    videoDurationSec: 33.2,
+  }
+  writeJson(path.join(dir, 'review.json'), { pass: true, score: 92, checks: [], reviewedAt: new Date().toISOString(), evidence, ...review })
   if (index !== null) {
     const file = path.join(root, 'index.json')
     fs.writeFileSync(file, typeof index === 'string' ? index : JSON.stringify(index, null, 2))
@@ -95,11 +104,26 @@ function makeVideoDir(t, { slug = 'day0-test', publish = {}, review = {}, index 
     cadenceDays: 3,
     publish: { enabled: true, tid: 138, partitionName: '生活·日常', copyright: 1, noReprint: true },
     redlines: { requireAiLabel: true, bannedWords: ['刷量', '代实名'] },
+    // 真发测试默认打开三重闸（模块层 now 也会校验）
+    autoPublish: { dryRun: false, allowGo: true },
     ...config,
   }
   return { dir, root, cfg, slug, publishFile: path.join(dir, 'publish.json'), indexPath: path.join(root, 'index.json') }
 }
 
+/** 改过 storyboard/meta 之后刷新 review 的 evidence（模拟"改完再跑一次 review"；否则会被判 review 过期） */
+function refreshReviewEvidence(dir) {
+  const reviewPath = path.join(dir, 'review.json')
+  const review = JSON.parse(fs.readFileSync(reviewPath, 'utf8'))
+  review.reviewedAt = new Date().toISOString()
+  review.evidence = {
+    videoMtimeMs: fs.statSync(path.join(dir, 'video.mp4')).mtimeMs,
+    storyboardMtimeMs: fs.statSync(path.join(dir, 'storyboard.json')).mtimeMs,
+    metaMtimeMs: fs.statSync(path.join(dir, 'meta.json')).mtimeMs,
+    videoDurationSec: review.evidence?.videoDurationSec ?? null,
+  }
+  fs.writeFileSync(reviewPath, JSON.stringify(review, null, 2))
+}
 const rejectWith = (code) => (err) => {
   assert.ok(err instanceof PublishError, `应当抛 PublishError，实际是 ${err?.name}: ${err?.message}`)
   assert.equal(err.code, code, `错误码应为 ${code}，实际 ${err.code}（${err.message}）`)
@@ -209,6 +233,7 @@ test('标题空 / 标题超 80 字 / 标签超 10 个 或单个超 20 字 → �
   // titleForPost 空了会回退 meta.title，所以把 storyboard/meta 的备用标题一起清掉
   writeJson(path.join(emptyTitle.dir, 'storyboard.json'), { version: 4, slug: emptyTitle.slug, title: '', publish: { titleForPost: '', description: `x${AI_LABEL}`, tags: ['AI'] } })
   writeJson(path.join(emptyTitle.dir, 'meta.json'), { slug: emptyTitle.slug })
+  refreshReviewEvidence(emptyTitle.dir)
   await assert.rejects(publishVideo({ dir: emptyTitle.dir, mode: 'dry', config: emptyTitle.cfg }), rejectWith('INVALID_TITLE'))
 
   const longTitle = makeVideoDir(t, { publish: { titleForPost: '鱼'.repeat(81) } })
@@ -373,6 +398,7 @@ test('dry：配置 publish.titlePrefix 生效，且标题已带同前缀时不�
   const story = readJson(path.join(dup.dir, 'storyboard.json'))
   story.publish.titleForPost = '【AI】我在标题里已经带前缀了'
   writeJson(path.join(dup.dir, 'storyboard.json'), story)
+  refreshReviewEvidence(dup.dir)
   const r2 = await publishVideo({ dir: dup.dir, mode: 'dry', config: dup.cfg })
   assert.equal(r2.package.title, '【AI】我在标题里已经带前缀了')
 })
@@ -422,7 +448,7 @@ test('go 模式缺凭据 → AUTH_MISSING，且不发任何网络请求', async 
   t.after(() => fs.writeFileSync(CRED_FILE, backup))
   let calls = 0
   const transport = async () => { calls += 1; throw new Error('缺凭据时不应该发请求') }
-  await assert.rejects(publishVideo({ dir: fx.dir, mode: 'go', config: fx.cfg, transport }), rejectWith('AUTH_MISSING'))
+  await assert.rejects(publishVideo({ dir: fx.dir, mode: 'go', config: fx.cfg, transport, confirm: true }), rejectWith('AUTH_MISSING'))
   assert.equal(calls, 0)
   assert.equal(fs.existsSync(fx.publishFile), false)
 })
@@ -433,7 +459,7 @@ test('go：mock transport 走完投稿流程，写 publish.json + index.json（A
   const { transport, calls } = createTransport()
   // A 的 commands/video.mjs 就是这么调的：{ dir, config, dry:!go, go, json }（不是 mode）
   const { result, lines } = await captureLogs(() => publishVideo({
-    dir: fx.dir, config: fx.cfg, dry: false, go: true, json: true, transport,
+    dir: fx.dir, config: fx.cfg, dry: false, go: true, confirm: true, json: true, transport,
   }))
   assert.deepEqual(lines, [], '调用方自己打印时，本模块不能再输出（否则 --json 会出现两份 JSON）')
   assert.match(result.message, /bvid=BV1TEST00001/)
@@ -540,7 +566,7 @@ test('go：mock transport 走完投稿流程，写 publish.json + index.json（A
 test('提交阶段 412 → 抛 RISK_BLOCKED、不重试、不写 publish.json/index.json', async (t) => {
   const fx = makeVideoDir(t)
   const { transport, calls } = createTransport({ riskAt: 'add' })
-  await assert.rejects(publishVideo({ dir: fx.dir, mode: 'go', config: fx.cfg, transport, json: true }), (err) => {
+  await assert.rejects(publishVideo({ dir: fx.dir, mode: 'go', config: fx.cfg, transport, confirm: true, json: true }), (err) => {
     rejectWith('RISK_BLOCKED')(err)
     assert.match(err.message, /风控/)
     assert.match(err.message, /412/)
@@ -565,7 +591,7 @@ test('提交返回非 0 code → 抛 API_ERROR，不写发布记录', async (t) 
     }
     return transport(url, init)
   }
-  await assert.rejects(publishVideo({ dir: fx.dir, mode: 'go', config: fx.cfg, transport: wrapped, json: true }), (err) => {
+  await assert.rejects(publishVideo({ dir: fx.dir, mode: 'go', config: fx.cfg, transport: wrapped, confirm: true, json: true }), (err) => {
     rejectWith('API_ERROR')(err)
     assert.match(err.message, /请求参数错误/)
     return true
@@ -585,7 +611,7 @@ test('封面上传被平台拒绝 → COVER_FAILED，不提交稿件', async (t)
     }
     return transport(url, init)
   }
-  await assert.rejects(publishVideo({ dir: fx.dir, mode: 'go', config: fx.cfg, transport: wrapped, json: true }), (err) => {
+  await assert.rejects(publishVideo({ dir: fx.dir, mode: 'go', config: fx.cfg, transport: wrapped, confirm: true, json: true }), (err) => {
     rejectWith('COVER_FAILED')(err)
     assert.match(err.message, /图片格式不对/)
     return true

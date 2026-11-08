@@ -68,7 +68,7 @@ window.__ModuleLoader__.load({
       '.bf-badges{display:flex;gap:6px;flex-wrap:wrap;align-items:center}',
       '.bf-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;line-height:16px;padding:1px 8px;border-radius:999px;background:var(--dsw-alias-bg-layer-3,rgba(127,127,127,.16));color:var(--dsw-alias-label-secondary,#c9ccd1);text-decoration:none}',
       '.bf-badge[data-tone=good]{color:var(--dsw-alias-state-success-primary,#22c55e)}',
-      '.bf-badge[data-tone=warn]{color:var(--dsw-alias-state-warning-primary,#d29922)}',
+      '.bf-badge[data-tone=warn]{color:var(--dsw-alias-state-warn-primary,#d29922)}',
       '.bf-badge[data-tone=bad]{color:var(--dsw-alias-state-error-primary,#e5484d)}',
       '.bf-badge[data-tone=info]{color:var(--dsw-alias-brand-primary,#4c8dff)}',
       '.bf-badge[data-tone=muted]{color:var(--dsw-alias-label-tertiary,#9aa0a6)}',
@@ -83,10 +83,10 @@ window.__ModuleLoader__.load({
       '.bf-btn[disabled]{opacity:.5;cursor:default;filter:none}',
       '.bf-btn2{background:transparent;border:1px solid var(--dsw-alias-border-l2,rgba(127,127,127,.35));color:var(--dsw-alias-label-primary,inherit)}',
       '.bf-btn2:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.12))}',
-      '.bf-btn-warn{border-color:rgba(210,153,34,.55);border-color:color-mix(in srgb,var(--dsw-alias-state-warning-primary,#d29922) 55%,transparent);color:var(--dsw-alias-state-warning-primary,#d29922)}',
-      '.bf-dirty{font-size:12px;color:var(--dsw-alias-state-warning-primary,#d29922)}',
+      '.bf-btn-warn{border-color:rgba(210,153,34,.55);border-color:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#d29922) 55%,transparent);color:var(--dsw-alias-state-warn-primary,#d29922)}',
+      '.bf-dirty{font-size:12px;color:var(--dsw-alias-state-warn-primary,#d29922)}',
       '.bf-err{font-size:12px;line-height:18px;white-space:pre-line;color:var(--dsw-alias-state-error-primary,#e5484d);background:rgba(229,72,77,.08);background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#e5484d) 9%,transparent);border:1px solid rgba(229,72,77,.35);border-radius:8px;padding:8px 10px;margin:8px 0}',
-      '.bf-warn{font-size:12px;line-height:18px;white-space:pre-line;color:var(--dsw-alias-state-warning-primary,#d29922);background:rgba(210,153,34,.09);background:color-mix(in srgb,var(--dsw-alias-state-warning-primary,#d29922) 10%,transparent);border-radius:8px;padding:8px 10px;margin:8px 0}',
+      '.bf-warn{font-size:12px;line-height:18px;white-space:pre-line;color:var(--dsw-alias-state-warn-primary,#d29922);background:rgba(210,153,34,.09);background:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#d29922) 10%,transparent);border-radius:8px;padding:8px 10px;margin:8px 0}',
       '.bf-out{white-space:pre-wrap;word-break:break-all;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;line-height:17px;color:var(--dsw-alias-label-secondary,#c9ccd1);background:var(--dsw-alias-bg-layer-2,rgba(127,127,127,.08));border-radius:8px;padding:10px 12px;max-height:300px;overflow:auto;margin:8px 0}',
       '.bf-cred{display:flex;flex-direction:column;gap:8px;min-width:260px;flex:1;max-width:380px}',
       '.bf-videos{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-top:8px}',
@@ -105,8 +105,8 @@ window.__ModuleLoader__.load({
       '.bf-pre{margin:4px 0 0;padding:8px 9px;border-radius:8px;max-height:180px;overflow:auto;font-size:11px;line-height:15px;white-space:pre-wrap;word-break:break-all;background:var(--dsw-alias-bg-layer-2,rgba(0,0,0,.18));color:var(--dsw-alias-label-secondary,#c9ccd1)}',
       '.bf-foot{display:flex;flex-direction:column;gap:2px;margin-top:14px;padding-top:10px;border-top:.5px solid var(--dsw-alias-border-l2,rgba(127,127,127,.25))}',
       // ── v0.2：待你处理 / 工单 ──
-      '.bf-attn{display:flex;flex-direction:column;gap:6px;margin:10px 0 2px;padding:10px 12px;border-radius:12px;border:1px solid rgba(210,153,34,.5);border:1px solid color-mix(in srgb,var(--dsw-alias-state-warning-primary,#d29922) 50%,transparent);background:rgba(210,153,34,.08);background:color-mix(in srgb,var(--dsw-alias-state-warning-primary,#d29922) 9%,transparent)}',
-      '.bf-attn-title{font-size:13px;font-weight:600;line-height:20px;color:var(--dsw-alias-state-warning-primary,#d29922)}',
+      '.bf-attn{display:flex;flex-direction:column;gap:6px;margin:10px 0 2px;padding:10px 12px;border-radius:12px;border:1px solid rgba(210,153,34,.5);border:1px solid color-mix(in srgb,var(--dsw-alias-state-warn-primary,#d29922) 50%,transparent);background:rgba(210,153,34,.08);background:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#d29922) 9%,transparent)}',
+      '.bf-attn-title{font-size:13px;font-weight:600;line-height:20px;color:var(--dsw-alias-state-warn-primary,#d29922)}',
       '.bf-attn-item{display:flex;flex-direction:column;gap:4px;padding:8px 0;border-top:.5px solid rgba(210,153,34,.25)}',
       '.bf-attn-item:first-of-type{border-top:none;padding-top:2px}',
       '.bf-attn-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}',
@@ -174,7 +174,7 @@ window.__ModuleLoader__.load({
      * （DESIGN §5：/deps 的 ok 只由必需项决定）。错误会由组件当警告显示，不吞掉。
      */
     const jgetLoose = async (p) => {
-      const res = await fetch(API + p, { credentials: 'same-origin', headers: { accept: 'application/json' } })
+      const res = await fetch(API + p, { credentials: 'same-origin', headers: { accept: 'application/json' }, signal: AbortSignal.timeout(TIMEOUT_MS) })
       if (!res.ok) {
         const payload = await res.json().catch(() => null)
         const detail = payloadError(payload)
@@ -345,8 +345,6 @@ window.__ModuleLoader__.load({
         hint: 'HH:MM（24 小时制）' },
       { group: '节奏', path: ['schedule', 'window', 'end'], label: '叫醒窗口结束', kind: 'text', placeholder: '23:30',
         hint: 'HH:MM；可以跨午夜（比如 01:30）' },
-      { group: '节奏', path: ['schedule', 'minGapMinutes'], label: '失败重试间隔（分钟）', kind: 'number', min: 1, max: 240, step: 1,
-        hint: '叫醒失败后至少隔这么久再试（1–240）' },
       { group: '节奏', path: ['schedule', 'cooldownHours'], label: '叫醒后冷却（小时）', kind: 'number', min: 1, max: 240, step: 1,
         hint: '成功叫醒后的硬冷却（默认 30，1–240），避免一天里重复投递' },
       // ── v0.2 新增（DESIGN §10.9；前三个收在「节奏」，后四个在「工单与看门狗」）──
@@ -375,18 +373,14 @@ window.__ModuleLoader__.load({
       // ── 发布与红线（§4 publish / autoPublish / redlines）──
       { group: '发布与红线', path: ['publish', 'enabled'], label: '允许投稿', kind: 'switch',
         hint: '关 = 只渲染和自审，不生成投稿包' },
-      { group: '发布与红线', path: ['publish', 'dryRunByDefault'], label: '默认只出 dry 投稿包', kind: 'switch',
-        hint: '保持开：agent 默认不会真投稿' },
-      { group: '发布与红线', path: ['publish', 'selfApprove'], label: '自审通过即视为批准', kind: 'switch',
-        hint: '关 = 每次投稿前都等你确认（更安全但更麻烦）' },
       { group: '发布与红线', path: ['publish', 'profile'], label: '投稿 profile', kind: 'text', wide: true,
         hint: '默认 ugcfx/bup（B 站网页投稿的物化参数）' },
       { group: '发布与红线', path: ['publish', 'tid'], label: '分区 tid', kind: 'number', min: 1, max: 99999, step: 1,
         hint: '正整数；默认 138（生活·日常）' },
       { group: '发布与红线', path: ['publish', 'partitionName'], label: '分区名（展示）', kind: 'text',
         hint: '例如 生活·日常' },
-      { group: '发布与红线', path: ['publish', 'copyright'], label: '版权类型', kind: 'number', min: 1, max: 2, step: 1,
-        hint: '1 = 自制；2 = 转载' },
+      { group: '发布与红线', path: ['publish', 'copyright'], label: '版权类型（固定）', kind: 'number', min: 1, max: 1, step: 1, readOnly: true,
+        hint: '固定 1 = 自制：AI 生成内容不能标转载（改这里无效）' },
       { group: '发布与红线', path: ['publish', 'noReprint'], label: '禁止转载', kind: 'switch', hint: '默认开' },
       { group: '发布与红线', path: ['publish', 'tags'], label: '追加标签', kind: 'list',
         hint: '逗号分隔（最多 10 个、每个 ≤20 字）；投稿时追加在分区推荐标签之后' },
@@ -406,11 +400,9 @@ window.__ModuleLoader__.load({
       { group: '发布与红线', path: ['redlines', 'forbidUncreditedClips'], label: '不搬运未标注片段（红线）', kind: 'switch', readOnly: true,
         hint: '引用他人片段必须 UP/标题/BV 三要素齐全且单段 ≤3 秒；代码强制' },
       { group: '发布与红线', path: ['redlines', 'bannedWords'], label: '违禁词（红线）', kind: 'list',
-        hint: '逗号分隔（最多 200 个）；审查命中直接 FAIL。可以追加，别删（删了宿主也会按红线补默认值）' },
+        hint: '逗号分隔（最多 200 个）；审查命中直接 FAIL。可以追加；删空 = 默认词表也会被清掉（默认词表不会自动补回）' },
 
       // ── 自审（§4 selfReview）──
-      { group: '自审', path: ['selfReview', 'enabled'], label: '渲染后自动自审', kind: 'switch',
-        hint: '关 = 不跑 review；没有 pass=true 的视频不允许投稿' },
       { group: '自审', path: ['selfReview', 'passScore'], label: '附加评分线', kind: 'range', min: 0, max: 100, step: 1,
         hint: '硬闸门全过 = pass；这条只是质量建议线，不改变 pass' },
       { group: '自审', path: ['selfReview', 'minSubtitleCoverage'], label: '字幕覆盖率下限', kind: 'range', min: 0, max: 1, step: 0.01,
@@ -419,10 +411,8 @@ window.__ModuleLoader__.load({
         hint: '−60..0，且必须小于上限' },
       { group: '自审', path: ['selfReview', 'loudnessRange', 1], label: '响度上限（LUFS）', kind: 'number', min: -60, max: 0, step: 0.1,
         hint: '−60..0，且必须大于下限' },
-      { group: '自审', path: ['selfReview', 'requireAiLabel'], label: '自审校验 AI 标注', kind: 'switch',
-        hint: '建议保持开；就算关掉，红线表也会拦（别关）' },
-      { group: '自审', path: ['selfReview', 'requireRedlineCard'], label: '要求红线卡片画面', kind: 'switch',
-        hint: '默认关；开 = 画面里必须有红线条卡' },
+      { group: '自审', path: ['selfReview', 'requireAiLabel'], label: '自审校验 AI 标注（红线）', kind: 'switch', readOnly: true,
+        hint: '画面与简介都必须有「AI 生成」；代码强制，关不掉' },
       { group: '自审', path: ['selfReview', 'maxClipSec'], label: '引用片段最长（秒）', kind: 'number', min: 0.5, max: 10, step: 0.1,
         hint: '0.5–10；红线是单段 ≤3 秒' },
 
@@ -794,7 +784,7 @@ window.__ModuleLoader__.load({
     }
 
     // ── 顶部动作条（保存 / 依赖体检 / 重新读取 / 现在做一条）───────────────
-    function ActionsBar({ busy, dirty, allowGo, onSave, onDeps, onReload, onWake }) {
+    function ActionsBar({ busy, dirty, allowGo, allowGoPending, onSave, onDeps, onReload, onWake }) {
       return h('div', { className: 'bf-actions' },
         h('button', { className: 'bf-btn', disabled: Boolean(busy), onClick: onSave }, busy === 'save' ? '保存中…' : '保存'),
         dirty ? h('span', { className: 'bf-dirty' }, '● 有改动还没保存（改了不点保存 = 没生效）') : null,
@@ -804,7 +794,8 @@ window.__ModuleLoader__.load({
         h('div', { className: 'bf-grow' }),
         allowGo
           ? h('span', { className: 'bf-badge', 'data-tone': 'bad' }, '真发已允许')
-          : h('span', { className: 'bf-badge' }, '真发未授权'))
+          : h('span', { className: 'bf-badge' }, '真发未授权'),
+        allowGoPending ? h('span', { className: 'bf-badge', 'data-tone': 'warn' }, '真发开关有未保存改动') : null)
     }
 
     // ── v0.2「待你处理」：attention 为空时整块不渲染（super-agent：健康状态不占注意力）──
@@ -1015,7 +1006,7 @@ window.__ModuleLoader__.load({
           if (ignored.length) text += '\n（宿主忽略的键：' + ignored.join('、') + '）'
           if (meta && meta.configPath) text += '\n配置文件：' + meta.configPath
           setOut(text + '\n（未在页面显示的字段已原样保留）')
-          await loadStatus()
+          try { await loadStatus() } catch { setOut(text + '\n⚠️ 已保存，但状态刷新失败（下个轮询周期会再试）') }
         } catch (e) { setErr('保存失败：' + msgOf(e)) } finally { setBusy('') }
       }
 
@@ -1052,8 +1043,7 @@ window.__ModuleLoader__.load({
             + (tk ? '（工单 ' + String(tk.id || tk.short || '') + (tk.title ? '：' + String(tk.title) : '') + '）' : '')
             + '\n会话：' + String((r && r.sessionId) || 'bili-faship') + ' · ' + fmtTime(r && r.at)
             + '\n进度看上面的「工单」列表和状态卡「任务」；成片出来会进「成片列表」。')
-          await loadStatus()
-          await loadTickets()
+          try { await loadStatus(); await loadTickets() } catch { /* 叫醒已成功，列表刷新失败不影响 */ }
         } catch (e) {
           const m = msgOf(e)
           setErr('叫醒失败：' + m + (/503/.test(m) ? '\n宿主说 sessionController 拿不到 —— 叫醒功能要在 DSH 里跑，且调度器已激活。' : ''))
@@ -1083,8 +1073,7 @@ window.__ModuleLoader__.load({
           if (r && r.detail) text += '\n' + String(r.detail)
           if (r && r.error) text += '\n' + String(r.error)
           setOut(text)
-          await loadTickets()
-          await loadStatus()
+          try { await loadTickets(); await loadStatus() } catch { /* 动作已成功，列表刷新失败不影响 */ }
         } catch (e) { setErr('工单' + what + '失败：' + msgOf(e)) } finally { setBusy('') }
       }
 
@@ -1106,7 +1095,7 @@ window.__ModuleLoader__.load({
             text = '✓ ' + jobLabel(action) + ' 完成'
           }
           setOut(text)
-          await loadStatus()
+          try { await loadStatus() } catch { /* 任务已启动，状态刷新失败不影响 */ }
         } catch (e) { setErr(jobLabel(action) + '启动失败：' + msgOf(e)) } finally { setBusy('') }
       }
 
@@ -1152,7 +1141,7 @@ window.__ModuleLoader__.load({
         if (cur && (cur.state === 'ok' || cur.state === 'loading')) return
         setReviews((prev) => ({ ...prev, [key]: { state: 'loading' } }))
         try {
-          const res = await fetch(mediaUrl(v, 'review.json'), { credentials: 'same-origin' })
+          const res = await fetch(mediaUrl(v, 'review.json'), { credentials: 'same-origin', signal: AbortSignal.timeout(TIMEOUT_MS) })
           if (!res.ok) throw new Error(res.status === 404 ? '还没有 review.json（先跑自审）' : 'HTTP ' + res.status)
           const data = await res.json()
           setReviews((prev) => ({ ...prev, [key]: { state: 'ok', data } }))
@@ -1180,7 +1169,13 @@ window.__ModuleLoader__.load({
       const ordered = GROUP_ORDER.map((name) => groups.filter((g) => g.name === name)[0]).filter(Boolean)
       const known = new Set(GROUP_ORDER)
       const leftovers = groups.filter((g) => !known.has(g.name))
-      const allowGoNow = Boolean(getPath(cfg, ['autoPublish', 'allowGo']))
+      // ⚠️ 徽标/红条必须读**已保存**的配置：v0.2.0 读的是未保存草稿 ——
+      // 把开关从开切到关但不点保存，页面立刻显示「真发未授权」，服务端 allowGo 仍是 true。
+      let savedCfg = {}
+      try { savedCfg = savedJson ? JSON.parse(savedJson) : {} } catch { savedCfg = {} }
+      const allowGoNow = Boolean(getPath(savedCfg, ['autoPublish', 'allowGo']))
+      const allowGoDraft = Boolean(getPath(cfg, ['autoPublish', 'allowGo']))
+      const allowGoPending = allowGoDraft !== allowGoNow
       const dirty = savedJson !== '' && JSON.stringify(cfg) !== savedJson
 
       const renderGroup = (g) => h('div', { className: 'bf-sec', key: g.name },
@@ -1210,7 +1205,7 @@ window.__ModuleLoader__.load({
         out ? h('div', { className: 'bf-out' }, out) : null,
 
         h(ActionsBar, {
-          busy, dirty, allowGo: allowGoNow,
+          busy, dirty, allowGo: allowGoNow, allowGoPending,
           onSave: save, onDeps: checkDeps, onReload: reloadAll, onWake: wakeNow,
         }),
 

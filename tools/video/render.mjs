@@ -532,6 +532,9 @@ export async function renderVideo({ dir, config, deps = {} } = {}) {
         fs.rmSync(src, { force: true })
       }
     }
+    // 渲染出了新视频：旧的 review.json 立即作废。
+    // 否则「render → review(pass) → 改 storyboard → 再 render」的新视频会拿旧 pass 去发布（v0.2.0 实测能过）。
+    try { fs.rmSync(path.join(absDir, 'review.json'), { force: true }) } catch { /* 不存在就算了 */ }
 
     return {
       dir: absDir,

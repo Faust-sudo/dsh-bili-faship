@@ -444,7 +444,6 @@ export function planTemplate(opts = {}) {
  */
 export function writePlan(dir, opts = {}) {
   const abs = path.resolve(dir)
-  fs.mkdirSync(abs, { recursive: true })
   const file = storyboardPath(abs)
   if (fs.existsSync(file)) {
     let story = null
@@ -457,8 +456,11 @@ export function writePlan(dir, opts = {}) {
     }
     return { created: false, dir: abs, file, story, result }
   }
+  // 先校验模板再落盘：非法参数（奇数宽、fps 越界等）不能留下一个空目录/半成品 storyboard
   const story = planTemplate(opts)
   const result = validateStoryboard(story)
+  if (!result.ok) throw new Error(`plan 参数不合法（没有落盘）：\n${errorSummary(result.errors)}`)
+  fs.mkdirSync(abs, { recursive: true })
   fs.writeFileSync(file, `${JSON.stringify(story, null, 2)}\n`, 'utf8')
   return { created: true, dir: abs, file, story, result }
 }

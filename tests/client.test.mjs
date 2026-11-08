@@ -217,17 +217,13 @@ const DESIGN_SECTION4_KEYS = [
   'voice.voice',
   'voice.rate',
   'voice.pitch',
-  'selfReview.enabled',
   'selfReview.passScore',
   'selfReview.minSubtitleCoverage',
   'selfReview.loudnessRange.0',
   'selfReview.loudnessRange.1',
   'selfReview.requireAiLabel',
-  'selfReview.requireRedlineCard',
   'selfReview.maxClipSec',
   'publish.enabled',
-  'publish.dryRunByDefault',
-  'publish.selfApprove',
   'publish.profile',
   'publish.tid',
   'publish.partitionName',
@@ -252,13 +248,23 @@ const DESIGN_SECTION4_KEYS = [
   'schedule.enabled',
   'schedule.window.start',
   'schedule.window.end',
-  'schedule.minGapMinutes',
   'schedule.cooldownHours',
   'autoPublish.dryRun',
   'autoPublish.allowGo',
 ]
 
-test('FIELDS 覆盖 DESIGN §4 的全部配置项（' + DESIGN_SECTION4_KEYS.length + ' 项）', () => {
+test('FIELDS 覆盖 DESIGN §4 的生效配置项（' + DESIGN_SECTION4_KEYS.length + ' 项）；死开关不得再出现', () => {
+  // v0.2.0 有 7 个「有 UI、无人消费」的死设置；0.2.1 删掉/改只读，这里锁住防回归
+  const DEAD_KEYS = ['selfReview.enabled', 'selfReview.requireRedlineCard', 'publish.dryRunByDefault', 'publish.selfApprove', 'schedule.minGapMinutes']
+  const liveKeys = new Set(MOD.FIELDS.map(fieldKey))
+  for (const k of DEAD_KEYS) assert.equal(liveKeys.has(k), false, '死设置又回到设置页了：' + k)
+  const byKey = new Map(MOD.FIELDS.map((f) => [fieldKey(f), f]))
+  assert.equal(byKey.get('publish.copyright').readOnly, true, '版权类型应只读（固定自制）')
+  assert.equal(byKey.get('selfReview.requireAiLabel').readOnly, true, 'AI 标注自审开关应只读（红线）')
+  // 允许真发徽标必须读已保存配置（静态可检查：不再直接用 cfg 的 allowGo）
+  assert.ok(!/const allowGoNow = Boolean\\(getPath\\(cfg, \\['autoPublish', 'allowGo'\\]\\)\\)/.test(SOURCE), 'allowGo 徽标不能读未保存草稿')
+})
+test('FIELDS 覆盖 DESIGN §4 的全部配置项', () => {
   const keys = new Set(MOD.FIELDS.map(fieldKey))
   const missing = DESIGN_SECTION4_KEYS.filter((k) => !keys.has(k))
   assert.deepEqual(missing, [], 'DESIGN §4 里这些配置项没出现在设置页：' + missing.join(', '))

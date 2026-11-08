@@ -133,14 +133,26 @@ function merge(base, over) {
   return out
 }
 
-/** 读一个 JSON 文件；不存在/损坏都返回 null（配置是"锦上添花"，坏文件不该让插件起不来）。 */
+/** 读一个 JSON 文件；不存在返回 null；存在但损坏 → 返回 null 并记一条 warning（不静默吞掉）。 */
+let lastWarnings = []
 function readJsonFile(file) {
+  let text
   try {
-    const text = fs.readFileSync(file, 'utf8')
-    return JSON.parse(text.replace(/^\uFEFF/, ''))
+    text = fs.readFileSync(file, 'utf8')
   } catch {
+    return null // 不存在（正常）
+  }
+  try {
+    return JSON.parse(text.replace(/^\uFEFF/, ''))
+  } catch (e) {
+    lastWarnings.push(`配置文件不是合法 JSON：${file}（${String(e?.message ?? e).split('\n')[0].slice(0, 120)}）—— 当前按默认值运行；下次保存会自动备份原文件`)
     return null
   }
+}
+
+/** 最近一次读配置时发现的问题（GET /settings / faship_status 展示用；readUserConfig 每次会重置）。 */
+export function configWarnings() {
+  return lastWarnings.slice()
 }
 
 /** 从一份用户配置里取 video 段：标准写法 { video } 优先，否则把根字段当平铺写法。 */
@@ -157,6 +169,7 @@ function videoSection(raw) {
  * 导出是为了让宿主"保存前读旧值"和测试复用同一套规则。
  */
 export function readUserConfig() {
+  lastWarnings = []
   const legacyFile = LEGACY_CONFIG_FILE
   // 旧文件只取 video 段（DESIGN §3 的兼容要求），且新旧文件是同一个时不要重复读
   const legacyRaw = legacyFile && path.resolve(legacyFile) !== path.resolve(CONFIG_FILE) ? readJsonFile(legacyFile) : null

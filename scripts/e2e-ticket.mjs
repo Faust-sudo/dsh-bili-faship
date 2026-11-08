@@ -28,8 +28,8 @@ fs.writeFileSync(CFG, JSON.stringify({
     minDurationSec: 8,
     paths: {
       cache: path.join(HOME, 'cache'),
-      ffmpeg: process.env.REAL_FFMPEG || 'C:/Users/zcr/.dsh/bili-whale/bin/ffmpeg.exe',
-      stickers: process.env.REAL_STICKERS || 'C:/Users/zcr/.dsh/bili-whale/stickers/packs/大肥鱼',
+      ffmpeg: process.env.REAL_FFMPEG || process.env.FFMPEG || '',
+      stickers: process.env.REAL_STICKERS || '',
     },
     publish: { tags: ['AI', '工单E2E'], titlePrefix: '【E2E】' },
   },
@@ -56,7 +56,15 @@ const ctx = {
   get(k) {
     if (k === 'connection') return { requestRejection: () => undefined }
     if (k === 'sessionController') {
-      return { async create() { return {} }, async prompt(req) { prompts.push(req); return { ok: true } } }
+      return {
+        async create() { return {} },
+        async prompt(req, signal) {
+          // 宿主契约：prompt(request, signal)；漏传 signal 会 TypeError
+          signal.throwIfAborted()
+          prompts.push(req)
+          return { ok: true }
+        },
+      }
     }
     return undefined
   },

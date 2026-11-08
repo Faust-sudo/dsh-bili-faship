@@ -184,16 +184,29 @@ export function resolveDuration(meta, timing) {
   return null
 }
 
-/** 找「AI 生成」标注：topbar.right 或 publish.description。 */
+/** 找「AI 生成」标注：**画面（topbar）与简介（publish）都必须有**（红线第一条）。
+ *  v0.2.0 只要求"任意一处"，实测 topbar.right 为空、只有简介标注也能 pass 100 —— 画面无标注就发出去了。 */
 export function findAiLabel(story) {
-  const cands = []
-  if (isObj(story?.topbar) && nonEmpty(story.topbar.right)) cands.push(['topbar.right', story.topbar.right])
-  if (isObj(story?.publish) && nonEmpty(story.publish.description)) cands.push(['publish.description', story.publish.description])
-  if (isObj(story?.publish) && nonEmpty(story.publish.aiLabel)) cands.push(['publish.aiLabel', story.publish.aiLabel])
-  for (const [where, text] of cands) {
-    if (AI_LABEL_RE.test(text)) return { ok: true, where, text }
+  const screen = []
+  if (isObj(story?.topbar)) {
+    if (nonEmpty(story.topbar.right)) screen.push(['topbar.right', story.topbar.right])
+    if (nonEmpty(story.topbar.label)) screen.push(['topbar.label', story.topbar.label])
   }
-  return { ok: false, where: null, candidates: cands.map(([w]) => w) }
+  const description = []
+  if (isObj(story?.publish)) {
+    if (nonEmpty(story.publish.description)) description.push(['publish.description', story.publish.description])
+    if (nonEmpty(story.publish.aiLabel)) description.push(['publish.aiLabel', story.publish.aiLabel])
+  }
+  const screenHit = screen.find(([, text]) => AI_LABEL_RE.test(text)) || null
+  const descHit = description.find(([, text]) => AI_LABEL_RE.test(text)) || null
+  return {
+    ok: Boolean(screenHit && descHit),
+    screenOk: Boolean(screenHit),
+    descriptionOk: Boolean(descHit),
+    screen: screenHit ? { where: screenHit[0], text: screenHit[1] } : null,
+    description: descHit ? { where: descHit[0], text: descHit[1] } : null,
+    where: (screenHit || descHit || [])[0] ?? null,
+  }
 }
 
 const softPenalty = (ok) => (ok ? 0 : 4)
@@ -207,7 +220,7 @@ const softPenalty = (ok) => (ok ? 0 : 4)
  *   config: object, now?: Date
  * }} input
  */
-export function evaluateReview({ story, storyboardError = null, meta = null, timing = null, loudness = null, config = {}, now = new Date() } = {}) {
+export function evaluateReview({ story, storyboardError = null, meta = null, timing = null, loudness = null, config = {}, now = new Date(), videoPresent = true, videoDurationSec = null } = {}) {
   const cfg = config || {}
   const sr = cfg.selfReview || {}
   const rl = cfg.redlines || {}
@@ -226,12 +239,15 @@ export function evaluateReview({ story, storyboardError = null, meta = null, tim
   else if (!isObj(story)) add('schema', true, false, '没有读到合法 storyboard')
   else add('schema', true, true, `storyboard version ${story.version} · ${story.scenes?.length ?? 0} 场`)
 
-  // 2) duration
-  const durationSec = resolveDuration(meta, timing)
-  if (durationSec === null) add('duration', true, false, '缺 meta.json / timing.json，测不出成片时长（先 video render）')
-  else if (durationSec < minDur) add('duration', true, false, `成片 ${durationSec.toFixed(1)}s < 下限 ${minDur}s`)
-  else if (durationSec > maxDur) add('duration', true, false, `成片 ${durationSec.toFixed(1)}s > 上限 ${maxDur}s`)
-  else add('duration', true, true, `成片 ${durationSec.toFixed(1)}s ∈ [${minDur}, ${maxDur}]s`)
+  // 2) duration —— 优先用 video.mp4 的**实测**时长（v0.2.0 只信 meta.json：改大 meta.durationSec 就能让 2 秒片过时长闸）
+  const realDur = typeof videoDurationSec === 'number' && Number.isFinite(videoDurationSec) && videoDurationSec > 0 ? videoDurationSec : null
+  const durationSec = realDur ?? resolveDuration(meta, timing)
+  const durSrc = realDur ? 'video.mp4 实测' : 'meta/timing（没测到视频）'
+  if (!videoPresent) add('duration', true, false, '没有 video.mp4（先 video render）')
+  else if (durationSec === null) add('duration', true, false, '缺 meta.json / timing.json，测不出成片时长（先 video render）')
+  else if (durationSec < minDur) add('duration', true, false, `成片 ${durationSec.toFixed(1)}s（${durSrc}）< 下限 ${minDur}s`)
+  else if (durationSec > maxDur) add('duration', true, false, `成片 ${durationSec.toFixed(1)}s（${durSrc}）> 上限 ${maxDur}s`)
+  else add('duration', true, true, `成片 ${durationSec.toFixed(1)}s（${durSrc}）∈ [${minDur}, ${maxDur}]s`)
 
   // 3) loudness
   const [lo, hi] = loudRange
@@ -243,12 +259,14 @@ export function evaluateReview({ story, storyboardError = null, meta = null, tim
     add('loudness', true, true, `集成响度 ${loudness.toFixed(1)} LUFS ∈ [${lo}, ${hi}] LUFS`)
   }
 
-  // 4) AI 标注（红线：AI 生成如实标注）
-  const needAi = rl.requireAiLabel !== false && sr.requireAiLabel !== false
+  // 4) AI 标注（红线：AI 生成如实标注；**不可通过配置关闭**）
   const ai = findAiLabel(story)
-  if (!needAi) add('aiLabel', true, true, '配置关闭了 AI 标注闸门（不推荐；红线默认要求标注）')
-  else if (ai.ok) add('aiLabel', true, true, `已标注（${ai.where}）`)
-  else add('aiLabel', true, false, '没找到「AI 生成」标注：topbar.right 和 publish.description 里至少一处要写')
+  if (ai.ok) add('aiLabel', true, true, `画面（${ai.screen.where}）与简介（${ai.description.where}）都已标注 AI 生成`)
+  else {
+    add('aiLabel', true, false,
+      `AI 标注不完整（画面${ai.screenOk ? '✓' : '✗ 需要 topbar.right 写「AI 生成」'}；简介${ai.descriptionOk ? '✓' : '✗ 需要 publish.description 写「AI 生成」'}）` +
+      ' —— 这是红线，配置不能关闭')
+  }
 
   // 5) 引用
   const citations = checkCitations(story?.citations, maxClipSec)
@@ -335,10 +353,25 @@ export function measureLoudness(videoPath, { ffmpeg } = {}) {
   return Number.isFinite(v) ? v : null
 }
 
+/** 用 ffmpeg 读 video.mp4 的真实时长（秒）；读不到返回 null（交给 meta 兜底）。 */
+export function measureDuration(videoPath, { ffmpeg } = {}) {
+  if (!videoPath || !fs.existsSync(videoPath)) return null
+  let exe = ffmpeg
+  if (!exe) {
+    try { exe = requireFfmpeg() } catch { return null }
+  }
+  const p = spawnSync(exe, ['-hide_banner', '-i', videoPath], { encoding: 'utf8', windowsHide: true, timeout: 60_000 })
+  const text = `${(p && p.stderr) || ''}\n${(p && p.stdout) || ''}`
+  const m = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(text)
+  if (!m) return null
+  const sec = Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3])
+  return Number.isFinite(sec) && sec > 0 ? sec : null
+}
+
 /**
  * 自审一条视频：读 <dir>/storyboard.json + meta.json + timing.json + video.mp4，
  * 跑硬闸门，写 <dir>/review.json。
- * @param {{dir:string, config?:object, deps?:{loudness?:Function, ffmpeg?:string}}} opts
+ * @param {{dir:string, config?:object, deps?:{loudness?:Function, duration?:Function, ffmpeg?:string}}} opts
  * @returns {Promise<{pass:boolean, score:number, checks:Array, reviewedAt:string, dir:string, reviewPath:string}>}
  */
 export async function reviewVideo({ dir, config, deps = {} } = {}) {
@@ -359,6 +392,7 @@ export async function reviewVideo({ dir, config, deps = {} } = {}) {
   const meta = safeReadJson(path.join(absDir, 'meta.json'))
   const timing = safeReadJson(path.join(absDir, 'timing.json'))
   const videoPath = path.join(absDir, 'video.mp4')
+  const videoPresent = fs.existsSync(videoPath)
 
   let loudness = null
   try {
@@ -367,13 +401,28 @@ export async function reviewVideo({ dir, config, deps = {} } = {}) {
   } catch (e) {
     loudness = null
   }
+  let videoDurationSec = null
+  try {
+    if (typeof deps.duration === 'function') videoDurationSec = await deps.duration(videoPath, { dir: absDir })
+    else videoDurationSec = measureDuration(videoPath, { ffmpeg: deps.ffmpeg })
+  } catch (e) {
+    videoDurationSec = null
+  }
 
-  const result = evaluateReview({ story, storyboardError, meta, timing, loudness, config: cfg })
+  const result = evaluateReview({ story, storyboardError, meta, timing, loudness, config: cfg, videoPresent, videoDurationSec })
+  // 记录"审的是哪一版视频/故事板"：render 换了视频、或 storyboard 改过之后，publish 能用它判 review 过期
+  const mtimeOf = (f) => { try { return fs.statSync(path.join(absDir, f)).mtimeMs } catch { return null } }
+  const evidence = {
+    videoMtimeMs: mtimeOf('video.mp4'),
+    storyboardMtimeMs: mtimeOf('storyboard.json'),
+    metaMtimeMs: mtimeOf('meta.json'),
+    videoDurationSec: videoDurationSec ?? null,
+  }
   const reviewPath = path.join(absDir, REVIEW_FILE)
   const tmp = `${reviewPath}.tmp-${process.pid}`
-  fs.writeFileSync(tmp, `${JSON.stringify({ ...result, dir: absDir }, null, 2)}\n`, 'utf8')
+  fs.writeFileSync(tmp, `${JSON.stringify({ ...result, dir: absDir, evidence }, null, 2)}\n`, 'utf8')
   fs.renameSync(tmp, reviewPath)
-  return { ...result, dir: absDir, reviewPath }
+  return { ...result, dir: absDir, reviewPath, evidence }
 }
 
 /** 读已有的 review.json（status / publish 用）；不存在返回 null。 */

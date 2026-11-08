@@ -53,8 +53,8 @@ function helpText() {
       代码自审：schema/时长/响度/字幕覆盖/AI 标注/引用标注/红线词。
       写 <dir>/review.json；exit 0 = pass，1 = fail。自审是发布前置条件。
 
-  node tools/bili-faship.mjs publish --dir <dir> [--dry|--go] [--json]
-      默认 --dry 只生成投稿包、不联网；--go 才真发（自审 PASS + 频率闸）。
+  node tools/bili-faship.mjs publish --dir <dir> [--dry|--go --confirm] [--json]
+      默认 --dry 只生成投稿包、不联网；--go 才真发（自审 PASS + 频率闸 + allowGo/dryRun/confirm 三重闸）。
 
   node tools/bili-faship.mjs status  [--json]
       最近发布 / 下次到期 / 待发（自审 pass 未发）。
@@ -346,6 +346,10 @@ async function cmdPublish(opt, asJson) {
     console.error('publish 需要 --dir <视频目录>')
     return 2
   }
+  if (opt.go === true && opt.dry !== true && opt.confirm !== true) {
+    console.error('✗ 真发必须显式加 --confirm（三重闸：设置 autoPublish.allowGo=true + dryRun=false + 这里的 --confirm）')
+    return 2
+  }
   if (!fs.existsSync(PUBLISH_MODULE)) {
     console.error('投稿模块未安装（缺 tools/video/publish.mjs）。本命令只负责转发，不会自己投稿。')
     return 2
@@ -363,6 +367,9 @@ async function cmdPublish(opt, asJson) {
       config: videoConfig(),
       dry: !go,
       go,
+      // 真发的模块层闸门（allowGo / dryRun / confirm）在 publish.mjs 里也要过；
+      // CLI 的显式确认就是 --confirm，不是缺省 true。
+      confirm: opt.confirm === true,
       json: asJson,
     })
     if (asJson) console.log(JSON.stringify(result ?? null, null, 2))

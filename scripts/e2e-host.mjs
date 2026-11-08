@@ -34,8 +34,8 @@ fs.writeFileSync(CFG, JSON.stringify({
     paths: {
       cache: path.join(HOME, 'cache'),
       // 隔离的 DSH_HOME 里没有 ~/.dsh/bili-whale/bin 与表情包 → 显式指向本机真实路径
-      ffmpeg: process.env.REAL_FFMPEG || 'C:/Users/zcr/.dsh/bili-whale/bin/ffmpeg.exe',
-      stickers: process.env.REAL_STICKERS || 'C:/Users/zcr/.dsh/bili-whale/stickers/packs/大肥鱼',
+      ffmpeg: process.env.REAL_FFMPEG || process.env.FFMPEG || '',
+      stickers: process.env.REAL_STICKERS || '',
     },
     publish: { tags: ['AI', '端到端'], titlePrefix: '【E2E】' },
   },

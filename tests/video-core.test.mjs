@@ -78,6 +78,8 @@ function metalessFixture({ durationSec = 40, story: storyOverride = null, mutate
   const story2 = storyOverride || story
   const { timing } = coverageTiming(story2)
   writeJson(path.join(dir, 'timing.json'), timing)
+  // 真实 review 会检查 video.mp4 是否存在；夹具放一个占位视频（deps.duration 用 meta 时长）
+  fs.writeFileSync(path.join(dir, 'video.mp4'), Buffer.alloc(64, 7))
   writeJson(path.join(dir, 'meta.json'), {
     durationSec,
     files: { video: 'video.mp4', cover: 'cover.jpg', subtitles: 'subtitles.srt', timing: 'timing.json' },
@@ -322,7 +324,12 @@ async function runReview(fixture, { config = videoConfigMod.videoConfig(), loudn
   return reviewMod.reviewVideo({
     dir: fixture.dir,
     config,
-    deps: { loudness: async () => loudness },
+    deps: {
+      loudness: async () => loudness,
+      duration: async (_video, { dir }) => {
+        try { return JSON.parse(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8')).durationSec } catch { return null }
+      },
+    },
   })
 }
 
