@@ -29,7 +29,7 @@ jobs:
           node-version: ${{ matrix.node }}
       - name: Show toolchain
         run: node --version && npm --version
-      - name: Unit tests (offline: no render / no publish)
+      - name: "Unit tests (offline: no render / no publish)"
         run: node --test
       - name: Host + client selfcheck
         run: node selfcheck.mjs
